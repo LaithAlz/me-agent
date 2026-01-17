@@ -3,12 +3,13 @@
  * Shows bitmoji + plays voice explanation with user's cloned voice
  */
 import { useState, useRef, useEffect } from 'react';
-import { Play, Loader2, Mic, User, Square } from 'lucide-react';
+import { Play, Loader2, Mic, User, Square, Camera, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { synthesizeVoice, getAvatar, useVoiceId } from '@/lib/backendApi';
+import { synthesizeVoice, getAvatar, useVoiceId, generateAvatar } from '@/lib/backendApi';
+import { CameraModal } from './CameraModal';
 
 interface VoiceExplainerProps {
   explanation?: string;
@@ -24,8 +25,11 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [cloneSuccess, setCloneSuccess] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
+  const [showCameraModal, setShowCameraModal] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Load user's avatar on mount
   useEffect(() => {
@@ -42,6 +46,64 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
     
     loadAvatar();
   }, []);
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleTakePhoto = async () => {
+    setShowCameraModal(true);
+  };
+
+  const handleCameraConfirm = async (base64Data: string) => {
+    setIsGeneratingAvatar(true);
+    try {
+      console.log('Generating bitmoji avatar from camera photo...');
+      const result = await generateAvatar(base64Data, 'bitmoji');
+      
+      if (result.success && result.avatarBase64) {
+        console.log('Avatar generated successfully');
+        setAvatarUrl(`data:image/jpeg;base64,${result.avatarBase64}`);
+      } else {
+        console.error('Avatar generation failed:', result.error);
+      }
+    } catch (error) {
+      console.error('Avatar generation failed:', error);
+    } finally {
+      setIsGeneratingAvatar(false);
+      setShowCameraModal(false);
+    }
+  };
+
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsGeneratingAvatar(true);
+    try {
+      // Convert image to base64
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result as string;
+        const base64Data = base64String.split(',')[1]; // Remove data:image/jpeg;base64, prefix
+
+        console.log('Generating bitmoji avatar from photo...');
+        const result = await generateAvatar(base64Data, 'bitmoji');
+        
+        if (result.success && result.avatarBase64) {
+          console.log('Avatar generated successfully');
+          setAvatarUrl(`data:image/jpeg;base64,${result.avatarBase64}`);
+        } else {
+          console.error('Avatar generation failed:', result.error);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Photo upload failed:', error);
+    } finally {
+      setIsGeneratingAvatar(false);
+    }
+  };
 
   const handlePlayExplanation = async () => {
     const testMessage = "Voice cloning successful! This is how I'll explain your shopping decisions.";
@@ -164,6 +226,23 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
       {/* Hidden audio element */}
       <audio ref={audioRef} className="hidden" />
       
+      {/* Hidden file input for photo upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handlePhotoUpload}
+      />
+      
+      {/* Camera Modal */}
+      <CameraModal
+        open={showCameraModal}
+        onClose={() => setShowCameraModal(false)}
+        onConfirm={handleCameraConfirm}
+        isLoading={isGeneratingAvatar}
+      />
+      
       {/* Top-right floating card */}
       <Card className="fixed top-4 right-4 w-80 z-40 shadow-lg">
         <div className="p-4 space-y-3">
@@ -177,12 +256,25 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
             )}
           </div>
 
-          {/* Avatar Display */}
-          <div className="flex justify-center">
+          {/* Avatar Display with Buttons */}
+          <div className="flex justify-center items-center gap-2">
+            {/* Upload Button */}
+            <Button
+              onClick={handleAvatarClick}
+              disabled={isGeneratingAvatar}
+              size="sm"
+              variant="outline"
+              className="p-2 h-8 w-8"
+            >
+              <Upload className="h-4 w-4" />
+            </Button>
+
+            {/* Avatar Circle */}
             <div 
               className={cn(
-                "h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden",
-                isPlaying && "ring-4 ring-primary/30 animate-pulse"
+                "h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden relative",
+                isPlaying && "ring-4 ring-primary/30 animate-pulse",
+                isGeneratingAvatar && "opacity-50"
               )}
             >
               {avatarUrl ? (
@@ -195,7 +287,24 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
               ) : (
                 <User className="h-10 w-10 text-primary" />
               )}
+              
+              {isGeneratingAvatar && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                  <Loader2 className="h-6 w-6 text-white animate-spin" />
+                </div>
+              )}
             </div>
+
+            {/* Take Photo Button */}
+            <Button
+              onClick={handleTakePhoto}
+              disabled={isGeneratingAvatar}
+              size="sm"
+              variant="outline"
+              className="p-2 h-8 w-8"
+            >
+              <Camera className="h-4 w-4" />
+            </Button>
           </div>
 
           {/* Explanation Text - NOT SHOWN HERE */}
