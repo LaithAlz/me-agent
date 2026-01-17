@@ -1,0 +1,208 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* Me-Agent Design System - Trust-focused, minimal, high-signal */
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Deep navy - trust, authority */
+    --primary: 222 47% 20%;
+    --primary-foreground: 210 40% 98%;
+
+    /* Slate - secondary actions */
+    --secondary: 215 20% 94%;
+    --secondary-foreground: 222 47% 20%;
+
+    --muted: 215 20% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    /* Emerald - verified, success, consent granted */
+    --accent: 158 64% 40%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Trust green for verified states */
+    --verified: 158 64% 40%;
+    --verified-foreground: 0 0% 100%;
+
+    /* Warning amber */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 215 20% 90%;
+    --input: 215 20% 90%;
+    --ring: 222 47% 20%;
+
+    --radius: 0.5rem;
+
+    /* Security banner */
+    --security-banner: 222 47% 97%;
+    --security-banner-border: 222 47% 85%;
+
+    /* Audit log colors */
+    --audit-consent: 158 64% 92%;
+    --audit-bundle: 215 80% 92%;
+    --audit-cart: 270 60% 92%;
+    --audit-checkout: 38 92% 92%;
+  }
+
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 158 64% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --verified: 158 64% 45%;
+    --verified-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 0%;
+
+    --destructive: 0 62% 40%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 212 27% 84%;
+
+    --security-banner: 222 47% 12%;
+    --security-banner-border: 222 47% 25%;
+
+    --audit-consent: 158 40% 15%;
+    --audit-bundle: 215 40% 15%;
+    --audit-cart: 270 30% 15%;
+    --audit-checkout: 38 50% 15%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  code, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer components {
+  /* Trust banner - always visible security message */
+  .trust-banner {
+    @apply bg-security-banner border border-security-banner-border rounded-lg px-4 py-3 flex items-center gap-3;
+  }
+
+  /* Permission chips */
+  .permission-chip {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  .permission-chip-active {
+    @apply bg-verified/15 text-verified border border-verified/30;
+  }
+
+  .permission-chip-inactive {
+    @apply bg-muted text-muted-foreground border border-border;
+  }
+
+  /* Passkey card styling */
+  .passkey-card {
+    @apply bg-card border-2 border-primary/20 rounded-xl p-6 shadow-lg;
+  }
+
+  .passkey-card-prompting {
+    @apply border-primary animate-pulse;
+  }
+
+  .passkey-card-success {
+    @apply border-verified;
+  }
+
+  .passkey-card-failed {
+    @apply border-destructive;
+  }
+
+  /* Audit event row colors */
+  .audit-consent {
+    @apply bg-audit-consent;
+  }
+
+  .audit-bundle {
+    @apply bg-audit-bundle;
+  }
+
+  .audit-cart {
+    @apply bg-audit-cart;
+  }
+
+  .audit-checkout {
+    @apply bg-audit-checkout;
+  }
+
+  /* Speaking animation for avatar */
+  @keyframes speaking-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.8; }
+  }
+
+  .avatar-speaking {
+    animation: speaking-pulse 0.6s ease-in-out infinite;
+  }
+
+  /* Subtle fade in for content */
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out forwards;
+  }
+
+  /* Staggered animation for list items */
+  .stagger-animation > * {
+    animation: fade-in 0.3s ease-out forwards;
+    opacity: 0;
+  }
+
+  .stagger-animation > *:nth-child(1) { animation-delay: 0.05s; }
+  .stagger-animation > *:nth-child(2) { animation-delay: 0.1s; }
+  .stagger-animation > *:nth-child(3) { animation-delay: 0.15s; }
+  .stagger-animation > *:nth-child(4) { animation-delay: 0.2s; }
+  .stagger-animation > *:nth-child(5) { animation-delay: 0.25s; }
+  .stagger-animation > *:nth-child(6) { animation-delay: 0.3s; }
+}
