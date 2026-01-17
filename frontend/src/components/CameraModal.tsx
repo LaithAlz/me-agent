@@ -76,6 +76,12 @@ export function CameraModal({ open, onClose, onConfirm, isLoading, initialImage 
     
     const imageData = canvas.toDataURL('image/jpeg');
     setCaptured(imageData);
+    
+    // Stop the camera stream after capture
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      setStream(null);
+    }
   };
 
   const handleCropChange = (e: React.ChangeEvent<HTMLInputElement>) => {
