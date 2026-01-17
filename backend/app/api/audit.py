@@ -89,6 +89,14 @@ async def create_audit_event(
     
     event_id = f"evt_{uuid.uuid4().hex[:12]}"
     
+    # Serialize policy to dict
+    policy_dict = {
+        "maxSpend": policy.maxSpend,
+        "allowedCategories": policy.allowedCategories,
+        "agentEnabled": policy.agentEnabled,
+        "requireConfirm": policy.requireConfirm,
+    }
+    
     event_data = await add_audit_event(user_id, {
         "id": event_id,
         "ts": datetime.utcnow().isoformat(),
@@ -96,7 +104,7 @@ async def create_audit_event(
         "action": event_create.action,
         "decision": event_create.decision,
         "reason": event_create.reason,
-        "policySnapshot": policy.model_dump(),
+        "policySnapshot": policy_dict,
         "meta": event_create.meta,
     })
     

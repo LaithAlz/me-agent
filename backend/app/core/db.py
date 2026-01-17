@@ -80,7 +80,7 @@ async def save_user(user_id: str, username: str, display_name: str) -> dict:
         "createdAt": datetime.utcnow().isoformat(),
     }
     
-    if _db:
+    if _db is not None:
         await _db.users.update_one(
             {"id": user_id},
             {"$set": user_data},
@@ -94,7 +94,7 @@ async def save_user(user_id: str, username: str, display_name: str) -> dict:
 
 async def get_user_by_username(username: str) -> Optional[dict]:
     """Find user by username."""
-    if _db:
+    if _db is not None:
         return await _db.users.find_one({"username": username})
     else:
         for user in _memory_store["users"].values():
@@ -105,7 +105,7 @@ async def get_user_by_username(username: str) -> Optional[dict]:
 
 async def get_user_by_id(user_id: str) -> Optional[dict]:
     """Find user by ID."""
-    if _db:
+    if _db is not None:
         return await _db.users.find_one({"id": user_id})
     else:
         return _memory_store["users"].get(user_id)
@@ -116,7 +116,7 @@ async def save_credential(user_id: str, credential_data: dict):
     credential_data["userId"] = user_id
     credential_data["createdAt"] = datetime.utcnow().isoformat()
     
-    if _db:
+    if _db is not None:
         await _db.credentials.insert_one(credential_data)
     else:
         cred_id = credential_data.get("credentialId", str(uuid.uuid4()))
@@ -125,7 +125,7 @@ async def save_credential(user_id: str, credential_data: dict):
 
 async def get_credentials_for_user(user_id: str) -> List[dict]:
     """Get all credentials for a user."""
-    if _db:
+    if _db is not None:
         cursor = _db.credentials.find({"userId": user_id})
         return await cursor.to_list(length=100)
     else:
@@ -134,7 +134,7 @@ async def get_credentials_for_user(user_id: str) -> List[dict]:
 
 async def get_credential_by_id(credential_id: str) -> Optional[dict]:
     """Find credential by ID."""
-    if _db:
+    if _db is not None:
         return await _db.credentials.find_one({"credentialId": credential_id})
     else:
         return _memory_store["credentials"].get(credential_id)
@@ -154,7 +154,7 @@ DEFAULT_POLICY = {
 
 async def get_policy(user_id: str) -> dict:
     """Get policy for user, returns default if none exists."""
-    if _db:
+    if _db is not None:
         policy = await _db.policies.find_one({"userId": user_id})
         if policy:
             policy.pop("_id", None)
@@ -175,7 +175,7 @@ async def save_policy(user_id: str, policy: dict) -> dict:
         "updatedAt": datetime.utcnow().isoformat(),
     }
     
-    if _db:
+    if _db is not None:
         await _db.policies.update_one(
             {"userId": user_id},
             {"$set": policy_data},
@@ -205,7 +205,7 @@ async def add_audit_event(user_id: str, event: dict) -> dict:
         "meta": event.get("meta", {}),
     }
     
-    if _db:
+    if _db is not None:
         await _db.audit_logs.insert_one(event_data)
     else:
         if user_id not in _memory_store["audit_logs"]:
@@ -217,7 +217,7 @@ async def add_audit_event(user_id: str, event: dict) -> dict:
 
 async def get_audit_logs(user_id: str, limit: int = 50) -> List[dict]:
     """Get audit logs for a user, most recent first."""
-    if _db:
+    if _db is not None:
         cursor = _db.audit_logs.find({"userId": user_id}).sort("ts", -1).limit(limit)
         logs = await cursor.to_list(length=limit)
         for log in logs:
@@ -241,7 +241,7 @@ async def save_avatar(user_id: str, avatar_data: str, style: str = "bitmoji") ->
         "createdAt": datetime.utcnow().isoformat(),
     }
     
-    if _db:
+    if _db is not None:
         await _db.avatars.update_one(
             {"userId": user_id},
             {"$set": data},
@@ -255,7 +255,7 @@ async def save_avatar(user_id: str, avatar_data: str, style: str = "bitmoji") ->
 
 async def get_avatar(user_id: str) -> Optional[dict]:
     """Get avatar for user."""
-    if _db:
+    if _db is not None:
         avatar = await _db.avatars.find_one({"userId": user_id})
         if avatar:
             avatar.pop("_id", None)

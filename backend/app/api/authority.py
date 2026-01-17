@@ -101,6 +101,15 @@ async def check_authority(
     # Create audit event
     # ============================================================
     event_id = f"evt_{uuid.uuid4().hex[:12]}"
+    
+    # Serialize policy to dict
+    policy_dict = {
+        "maxSpend": policy.maxSpend,
+        "allowedCategories": policy.allowedCategories,
+        "agentEnabled": policy.agentEnabled,
+        "requireConfirm": policy.requireConfirm,
+    }
+    
     audit_event = await add_audit_event(user_id, {
         "id": event_id,
         "ts": datetime.utcnow().isoformat(),
@@ -108,7 +117,7 @@ async def check_authority(
         "action": request.action,
         "decision": decision,
         "reason": reason,
-        "policySnapshot": policy.model_dump(),
+        "policySnapshot": policy_dict,
         "meta": {
             "cartTotal": request.cartTotal,
             "categories": request.categories,
