@@ -371,22 +371,36 @@ export default function DemoPage() {
   }, [cart.checkoutUrl, bundle, addEvent]);
 
   const handleExplain = useCallback(async () => {
-    if (!bundle) return;
+    if (!bundle) {
+      console.log('No bundle available');
+      return;
+    }
     
     setIsExplaining(true);
+    console.log('Generating explanation...');
     
     try {
       const result = await explainBundle({
         intent: intentForm.shoppingIntent,
         bundle,
       });
+      
+      console.log('Explanation result:', result);
+      
       setExplanation(result);
+      setVoiceExplanation(result.text);
       
       addEvent('EXPLANATION_GENERATED', 'Agent explained its reasoning', {}, { hasAudio: !!result.audioUrl });
+      
+      toast({
+        title: 'Explanation generated',
+        description: 'Playing explanation now',
+      });
     } catch (error) {
+      console.error('Error generating explanation:', error);
       toast({
         title: 'Failed to generate explanation',
-        description: 'Please try again',
+        description: error instanceof Error ? error.message : 'Please try again',
         variant: 'destructive',
       });
     } finally {
