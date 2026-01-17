@@ -1,10 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Shield, Home, Settings, FileText, Menu, X } from 'lucide-react';
+import { Shield, Home, Settings, FileText, Menu, X, Store } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
 const navItems = [
-  { path: '/demo', label: 'Demo', icon: Home },
+  { path: '/shop', label: 'Shop', icon: Store },
+  { path: '/demo', label: 'Customize', icon: Home },
   { path: '/settings', label: 'Settings', icon: Settings },
   { path: '/audit', label: 'Audit Log', icon: FileText },
 ];

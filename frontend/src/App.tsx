@@ -8,6 +8,7 @@ import Demo from "./pages/Demo";
 import Settings from "./pages/Settings";
 import Audit from "./pages/Audit";
 import NotFound from "./pages/NotFound";
+import WebStore from "./pages/Shop";
 
 const queryClient = new QueryClient();
 
@@ -19,6 +20,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/shop" element={<WebStore />} />
           <Route path="/demo" element={<Demo />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/audit" element={<Audit />} />

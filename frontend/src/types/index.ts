@@ -1,5 +1,16 @@
 // Me-Agent Type Definitions
 
+export interface Product {
+  id: string;
+  title: string;
+  price: number;
+  imageUrl: string;
+  tags: string[];
+  productType: string;
+  vendor: string;
+  inStock: boolean;
+}
+
 export interface PermissionPolicy {
   maxSpend: number;
   allowedCategories: string[];
