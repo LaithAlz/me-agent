@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 
 const navItems = [
   { path: '/shop', label: 'Shop', icon: Store },
-  { path: '/checkout', label: 'Checkout', icon: ShoppingCart },
   { path: '/demo', label: 'Me-Agent', icon: Bot },
+  { path: '/checkout', label: 'Checkout', icon: ShoppingCart },
   { path: '/audit', label: 'Audit Log', icon: FileText },
 ];
 

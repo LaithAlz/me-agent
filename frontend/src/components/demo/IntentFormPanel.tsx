@@ -211,17 +211,18 @@ export function IntentFormPanel({
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 pt-2">
+        <div className="flex flex-col gap-3 pt-2">
           <Button
             onClick={onGenerate}
             disabled={!canGenerate}
-            className="flex-1"
+            className="w-full"
           >
             <Sparkles className="h-4 w-4 mr-2" />
             {isGenerating ? 'Generating...' : 'Generate Shopping Bundle'}
           </Button>
-          <Button variant="outline" onClick={onReset}>
-            <RotateCcw className="h-4 w-4" />
+          <Button variant="secondary" onClick={onReset} className="w-full">
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reset to default settings
           </Button>
         </div>
 
