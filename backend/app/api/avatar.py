@@ -6,6 +6,7 @@ import base64
 import httpx
 from fastapi import APIRouter, Cookie, HTTPException
 from typing import Optional
+import hashlib
 
 from ..core.config import get_settings
 from ..core.db import save_avatar, get_avatar
@@ -18,6 +19,56 @@ DEFAULT_DEMO_USER = "demo-user-1"
 
 def get_user_id(meagent_user: Optional[str]) -> str:
     return meagent_user or DEFAULT_DEMO_USER
+
+
+def generate_avatar_svg(description: str) -> str:
+    """
+    Generate a bitmoji avatar using Gemini's image generation models.
+    Takes the Gemini analysis and generates an actual cartoon avatar image.
+    """
+    settings = get_settings()
+    
+    if not settings.GOOGLE_GENERATIVE_AI_API_KEY:
+        return None
+    
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=settings.GOOGLE_GENERATIVE_AI_API_KEY)
+        
+        # Create a detailed prompt for generating a bitmoji avatar
+        prompt = f"""Generate a cute cartoon bitmoji-style avatar based on this description:
+
+{description}
+
+Requirements:
+- Simple, colorful cartoon style
+- Friendly and approachable face
+- Bitmoji or emoji-like art style
+- Clean and polished
+- Square format (200x200)
+- Cheerful expression"""
+        
+        # Use Gemini 2.5 Flash Image for generation
+        model = genai.GenerativeModel('gemini-2.5-flash-image')
+        
+        # Generate image using generate_content
+        response = model.generate_content(prompt)
+        
+        # Extract the generated image from response
+        if response.candidates and len(response.candidates) > 0:
+            candidate = response.candidates[0]
+            if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                for part in candidate.content.parts:
+                    if hasattr(part, 'inline_data') and part.inline_data:
+                        image_data = part.inline_data.data
+                        return base64.b64encode(image_data).decode('utf-8')
+        
+        print("No image data in Gemini response")
+        return None
+        
+    except Exception as e:
+        print(f"Gemini image generation failed: {str(e)}")
+        return None
 
 
 @router.post("/generate", response_model=AvatarGenerateResponse)
@@ -67,7 +118,7 @@ async def generate_avatar(
             )
         
         # Use Gemini to analyze the image and describe avatar features
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash')
         
         # Create the image part for Gemini
         image_part = {
@@ -96,19 +147,34 @@ AVATAR_PROMPT:
 
         response = model.generate_content([prompt, image_part])
         
-        # For now, we'll store the description and use a placeholder
-        # In production, you'd use Imagen or another image generation API
         avatar_description = response.text
+        print(f"Avatar description from Gemini: {avatar_description[:100]}...")
         
-        # Store the avatar (for now, store the description + original image)
-        # In production, you'd generate an actual cartoon image
-        await save_avatar(user_id, request.imageBase64, request.style)
+        # Generate an actual bitmoji avatar image from the description using Gemini
+        generated_avatar_base64 = generate_avatar_svg(avatar_description)
         
-        # Return success with the original image (frontend can apply CSS filters)
-        # In production, you'd return the generated cartoon avatar
+        if not generated_avatar_base64:
+            # Fallback to DiceBear if Gemini generation fails
+            avatar_seed = hashlib.md5(avatar_description.encode()).hexdigest()
+            url = f"https://api.dicebear.com/7.x/avataaars/png?seed={avatar_seed}&scale=90"
+            try:
+                dicebear_response = httpx.get(url, timeout=5)
+                if dicebear_response.status_code == 200:
+                    generated_avatar_base64 = base64.b64encode(dicebear_response.content).decode('utf-8')
+            except Exception as e:
+                print(f"DiceBear fallback failed: {str(e)}")
+                generated_avatar_base64 = None
+        
+        if not generated_avatar_base64:
+            # Last resort: return original image
+            generated_avatar_base64 = request.imageBase64
+        
+        # Store the generated avatar
+        await save_avatar(user_id, generated_avatar_base64, request.style)
+        
         return AvatarGenerateResponse(
             success=True,
-            avatarBase64=request.imageBase64,  # Return original for now
+            avatarBase64=generated_avatar_base64,
             style=request.style,
             error=None,
         )
