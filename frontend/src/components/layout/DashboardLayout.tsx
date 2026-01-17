@@ -1,12 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Shield, Home, Settings, FileText, Menu, X, Store } from 'lucide-react';
+import { Crown, Bot, FileText, Menu, X, Store } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
 const navItems = [
   { path: '/shop', label: 'Shop', icon: Store },
-  { path: '/demo', label: 'Customize', icon: Home },
-  { path: '/settings', label: 'Settings', icon: Settings },
+  { path: '/demo', label: 'Me-Agent', icon: Bot },
   { path: '/audit', label: 'Audit Log', icon: FileText },
 ];
 
@@ -23,7 +22,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-                <Shield className="h-5 w-5 text-primary-foreground" />
+                <Crown className="h-5 w-5 text-primary-foreground" />
               </div>
               <span className="text-lg font-semibold">Me-Agent</span>
             </Link>
@@ -90,7 +89,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <div className="border-b bg-security-banner">
         <div className="container mx-auto px-4 py-2">
           <div className="flex items-center justify-center gap-2 text-sm">
-            <Shield className="h-4 w-4 text-verified" />
+            <Crown className="h-4 w-4 text-verified" />
             <span className="text-muted-foreground">
               <strong className="text-foreground">No autonomous purchase.</strong> Checkout requires user click.
             </span>
