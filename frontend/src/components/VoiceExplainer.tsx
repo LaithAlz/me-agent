@@ -187,16 +187,9 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
             </div>
           </div>
 
-          {/* Explanation Text */}
-          {explanation ? (
-            <div className="bg-muted/50 rounded-lg p-2 text-xs leading-relaxed max-h-24 overflow-y-auto">
-              {explanation}
-            </div>
-          ) : (
-            <div className="bg-muted/50 rounded-lg p-2 text-xs leading-relaxed text-center text-muted-foreground">
-              {avatarUrl ? 'Waiting for explanation...' : 'Set up your avatar and voice to get started'}
-            </div>
-          )}
+          {/* Explanation Text - NOT SHOWN HERE */}
+          {/* Explanations display in the ExplainPanel, not in VoiceExplainer */}
+          {/* This component only handles avatar, voice recording, and playback */}
 
           {/* Voice Setup */}
           {!avatarUrl && !cloneSuccess && (
