@@ -48,11 +48,35 @@ const MOCK_PRODUCTS: Record<string, BundleItem[]> = {
 // Demo toggle for passkey success/failure
 let passkeyWillSucceed = true;
 
+import { 
+  isPlatformAuthenticatorAvailable, 
+  authorizeActionWithPasskey,
+  isWebAuthnSupported 
+} from './webauthn';
+
 export function setPasskeyDemoMode(willSucceed: boolean) {
   passkeyWillSucceed = willSucceed;
 }
 
+/**
+ * Authorize with passkey - uses real WebAuthn when available
+ * Falls back to demo mode for unsupported devices
+ */
 export async function authorizePasskey(): Promise<{ success: boolean; error?: string }> {
+  // Try real WebAuthn first
+  if (isWebAuthnSupported()) {
+    const hasPlatformAuth = await isPlatformAuthenticatorAvailable();
+    
+    if (hasPlatformAuth) {
+      // Use real biometric authentication
+      console.log('Using real WebAuthn biometric authentication');
+      const result = await authorizeActionWithPasskey('generateBundle');
+      return { success: result.success, error: result.error };
+    }
+  }
+  
+  // Fallback to demo mode
+  console.log('WebAuthn not available, using demo mode');
   await delay(1500); // Simulate biometric check
   
   if (passkeyWillSucceed) {

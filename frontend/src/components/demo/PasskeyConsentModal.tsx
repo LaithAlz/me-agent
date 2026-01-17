@@ -51,16 +51,20 @@ export function PasskeyConsentModal({
             {state === 'idle' && (
               <>
                 <div className="flex justify-center mb-4">
-                  <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Fingerprint className="h-8 w-8 text-primary" />
+                  <div className="h-20 w-20 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border-2 border-primary/20">
+                    <Fingerprint className="h-10 w-10 text-primary" />
                   </div>
                 </div>
-                <h3 className="font-semibold mb-1">Use your passkey</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Touch ID, Face ID, or security key
+                <h3 className="font-semibold mb-1">Authenticate with Biometrics</h3>
+                <p className="text-sm text-muted-foreground mb-1">
+                  Use your device's fingerprint sensor or Windows Hello
                 </p>
-                <Button onClick={onAuthorize} className="w-full">
-                  Authorize with Passkey
+                <p className="text-xs text-muted-foreground mb-4">
+                  Your biometric data never leaves your device
+                </p>
+                <Button onClick={onAuthorize} className="w-full gap-2">
+                  <Fingerprint className="h-4 w-4" />
+                  Authorize with Fingerprint
                 </Button>
               </>
             )}
@@ -68,13 +72,13 @@ export function PasskeyConsentModal({
             {state === 'prompting' && (
               <>
                 <div className="flex justify-center mb-4">
-                  <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center animate-pulse-ring">
-                    <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                  <div className="h-20 w-20 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border-2 border-primary/30 animate-pulse-ring">
+                    <Fingerprint className="h-10 w-10 text-primary" />
                   </div>
                 </div>
-                <h3 className="font-semibold mb-1">Waiting for passkey...</h3>
+                <h3 className="font-semibold mb-1">Touch your fingerprint sensor</h3>
                 <p className="text-sm text-muted-foreground">
-                  Complete the verification on your device
+                  Or complete Windows Hello verification
                 </p>
               </>
             )}

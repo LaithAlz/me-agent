@@ -27,14 +27,19 @@ class Settings(BaseSettings):
     
     # WebAuthn settings
     WEBAUTHN_RP_ID: str = "localhost"
-    WEBAUTHN_RP_NAME: str = "Me-Agent Demo"
-    WEBAUTHN_ORIGIN: str = "http://localhost:8080"
+    WEBAUTHN_RP_NAME: str = "Me-Agent"
+    WEBAUTHN_ORIGIN: str = "http://localhost:5173"
     
     # Demo mode (use simulated passkey if WebAuthn not fully supported)
     DEMO_MODE: bool = True
     
     # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:8080", "http://127.0.0.1:8080"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080"
+    ]
     
     class Config:
         env_file = ".env"
