@@ -1,0 +1,10 @@
+
+# Local env
+backend/.env
+
+# macOS
+.DS_Store
+backend/.DS_Store
+
+# Local env
+backend/.env
