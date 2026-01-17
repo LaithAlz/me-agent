@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,10 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PermissionChip } from '@/components/shared/PermissionChip';
-import { Shield, Sparkles, RotateCcw, X, Plus, AlertCircle } from 'lucide-react';
+import { Shield, Sparkles, RotateCcw, X, Plus, AlertCircle, Loader2, Save } from 'lucide-react';
 import type { IntentForm } from '@/types';
 import { AVAILABLE_CATEGORIES } from '@/types';
+import { getPolicy, updatePolicy, type AgentPolicy } from '@/lib/backendApi';
 
 interface IntentFormProps {
   form: IntentForm;
@@ -28,6 +29,57 @@ export function IntentFormPanel({
   isGenerating,
 }: IntentFormProps) {
   const [brandInput, setBrandInput] = useState('');
+  const [policy, setPolicy] = useState<AgentPolicy | null>(null);
+  const [isLoadingPolicy, setIsLoadingPolicy] = useState(true);
+  const [isSavingPolicy, setIsSavingPolicy] = useState(false);
+
+  // Load current policy from backend
+  useEffect(() => {
+    const loadPolicy = async () => {
+      try {
+        const data = await getPolicy();
+        setPolicy(data.policy);
+        // Sync form with policy
+        onChange({
+          ...form,
+          maxSpend: data.policy.maxSpend,
+          allowedCategories: data.policy.allowedCategories,
+          agentEnabled: data.policy.agentEnabled,
+        });
+      } catch (e) {
+        console.error('Failed to load policy:', e);
+      } finally {
+        setIsLoadingPolicy(false);
+      }
+    };
+    
+    loadPolicy();
+  }, []);
+
+  // Save policy to backend when it changes
+  const handlePolicyChange = async (updates: Partial<AgentPolicy>) => {
+    if (!policy) return;
+    
+    const newPolicy = { ...policy, ...updates };
+    setPolicy(newPolicy);
+    
+    // Sync form with policy
+    onChange({
+      ...form,
+      maxSpend: newPolicy.maxSpend,
+      allowedCategories: newPolicy.allowedCategories,
+      agentEnabled: newPolicy.agentEnabled,
+    });
+    
+    setIsSavingPolicy(true);
+    try {
+      await updatePolicy(updates);
+    } catch (e) {
+      console.error('Failed to save policy:', e);
+    } finally {
+      setIsSavingPolicy(false);
+    }
+  };
 
   const updateField = <K extends keyof IntentForm>(key: K, value: IntentForm[K]) => {
     onChange({ ...form, [key]: value });
@@ -54,8 +106,8 @@ export function IntentFormPanel({
     updateField('brandPreferences', form.brandPreferences.filter(b => b !== brand));
   };
 
-  const isValid = form.maxSpend > 0 && form.allowedCategories.length > 0;
-  const canGenerate = isValid && form.agentEnabled && !isGenerating;
+  const isValid = form.maxSpend > 0 && form.allowedCategories.length > 0 && form.agentEnabled;
+  const canGenerate = isValid && !isGenerating;
 
   return (
     <Card>
@@ -86,45 +138,64 @@ export function IntentFormPanel({
           <Label htmlFor="budget">
             Maximum Spend
             <span className="text-muted-foreground font-normal ml-2">(USD)</span>
+            {isSavingPolicy && <Loader2 className="h-3 w-3 animate-spin inline ml-2" />}
           </Label>
-          <div className="flex items-center gap-2">
-            <span className="text-lg font-semibold">$</span>
-            <Input
-              id="budget"
-              type="number"
-              min={1}
-              value={form.maxSpend}
-              onChange={(e) => updateField('maxSpend', Math.max(0, Number(e.target.value)))}
-              className="w-28"
-            />
-          </div>
-          {form.maxSpend <= 0 && (
-            <p className="text-xs text-destructive flex items-center gap-1">
-              <AlertCircle className="h-3 w-3" /> Budget must be greater than 0
-            </p>
+          {isLoadingPolicy ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Loading policy...</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-lg font-semibold">$</span>
+              <Input
+                id="budget"
+                type="number"
+                min={0}
+                max={10000}
+                value={policy?.maxSpend ?? ''}
+                onChange={(e) => handlePolicyChange({ maxSpend: Number(e.target.value) || 0 })}
+                className="w-32"
+              />
+            </div>
           )}
         </div>
 
         {/* Allowed Categories */}
         <div className="space-y-2">
-          <Label>Allowed Categories</Label>
-          <div className="flex flex-wrap gap-2">
-            {AVAILABLE_CATEGORIES.map(category => (
-              <button
-                key={category}
-                type="button"
-                onClick={() => toggleCategory(category)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${
-                  form.allowedCategories.includes(category)
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                }`}
-              >
-                {category}
-              </button>
-            ))}
-          </div>
-          {form.allowedCategories.length === 0 && (
+          <Label>
+            Allowed Categories
+            {isSavingPolicy && <Loader2 className="h-3 w-3 animate-spin inline ml-2" />}
+          </Label>
+          {isLoadingPolicy ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {AVAILABLE_CATEGORIES.map(category => (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => {
+                    const current = policy?.allowedCategories || [];
+                    const newCategories = current.includes(category)
+                      ? current.filter(c => c !== category)
+                      : [...current, category];
+                    handlePolicyChange({ allowedCategories: newCategories });
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${
+                    policy?.allowedCategories.includes(category)
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  }`}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+          )}
+          {policy?.allowedCategories.length === 0 && (
             <p className="text-xs text-destructive flex items-center gap-1">
               <AlertCircle className="h-3 w-3" /> Select at least one category
             </p>
@@ -198,16 +269,21 @@ export function IntentFormPanel({
           </div>
           <Switch
             id="agent-toggle"
-            checked={form.agentEnabled}
-            onCheckedChange={(checked) => updateField('agentEnabled', checked)}
+            checked={policy?.agentEnabled ?? false}
+            onCheckedChange={(checked) => handlePolicyChange({ agentEnabled: checked })}
+            disabled={isLoadingPolicy}
           />
         </div>
 
         {/* Active Permissions Summary */}
         <div className="flex flex-wrap gap-2">
-          <PermissionChip label={`$${form.maxSpend} max`} active />
-          <PermissionChip label={`${form.allowedCategories.length} categories`} active={form.allowedCategories.length > 0} />
-          <PermissionChip label="Agent" active={form.agentEnabled} />
+          {policy && (
+            <>
+              <PermissionChip label={`$${policy.maxSpend} max`} active />
+              <PermissionChip label={`${policy.allowedCategories.length} categories`} active={policy.allowedCategories.length > 0} />
+              <PermissionChip label="Agent" active={policy.agentEnabled} />
+            </>
+          )}
         </div>
 
         {/* Actions */}
@@ -226,11 +302,11 @@ export function IntentFormPanel({
         </div>
 
         {/* Security Notice */}
-        {!form.agentEnabled ? (
+        {!policy?.agentEnabled ? (
           <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 text-sm">
             <p className="flex items-center gap-2 text-warning">
               <AlertCircle className="h-4 w-4" />
-              Agent is disabled. Enable to generate bundles.
+              Agent is disabled. Enable above to generate bundles.
             </p>
           </div>
         ) : (

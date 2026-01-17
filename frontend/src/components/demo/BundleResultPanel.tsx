@@ -1,12 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Package, Minus, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { Package, Minus, Plus, Trash2, AlertTriangle, ShieldX } from 'lucide-react';
 import type { BundleResult, BundleItem } from '@/types';
 
 interface BundleResultPanelProps {
   bundle: BundleResult | null;
   maxSpend: number;
+  blockedItems?: string[];
   onUpdateQuantity: (itemId: string, delta: number) => void;
   onRemoveItem: (itemId: string) => void;
 }
@@ -14,6 +15,7 @@ interface BundleResultPanelProps {
 export function BundleResultPanel({
   bundle,
   maxSpend,
+  blockedItems = [],
   onUpdateQuantity,
   onRemoveItem,
 }: BundleResultPanelProps) {
@@ -55,11 +57,27 @@ export function BundleResultPanel({
             <BundleItemRow
               key={item.id}
               item={item}
+              isBlocked={blockedItems.includes(item.id)}
               onUpdateQuantity={(delta) => onUpdateQuantity(item.id, delta)}
               onRemove={() => onRemoveItem(item.id)}
             />
           ))}
         </div>
+
+        {/* Blocked Items Warning */}
+        {blockedItems.length > 0 && (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+            <ShieldX className="h-5 w-5 shrink-0" />
+            <div>
+              <p className="font-medium">
+                {blockedItems.length} item(s) blocked by your policy
+              </p>
+              <p className="text-xs opacity-80">
+                Remove blocked items or adjust your policy in the Authority Panel
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Summary */}
         <div className="pt-4 border-t space-y-2">
@@ -97,25 +115,40 @@ export function BundleResultPanel({
 
 function BundleItemRow({
   item,
+  isBlocked = false,
   onUpdateQuantity,
   onRemove,
 }: {
   item: BundleItem;
+  isBlocked?: boolean;
   onUpdateQuantity: (delta: number) => void;
   onRemove: () => void;
 }) {
   return (
-    <div className="py-4 first:pt-0 last:pb-0">
+    <div className={`py-4 first:pt-0 last:pb-0 ${isBlocked ? 'opacity-60' : ''}`}>
       <div className="flex gap-3">
         {/* Image placeholder */}
-        <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center shrink-0">
-          <Package className="h-6 w-6 text-muted-foreground" />
+        <div className={`h-16 w-16 rounded-lg flex items-center justify-center shrink-0 ${
+          isBlocked ? 'bg-destructive/10 ring-2 ring-destructive' : 'bg-muted'
+        }`}>
+          {isBlocked ? (
+            <ShieldX className="h-6 w-6 text-destructive" />
+          ) : (
+            <Package className="h-6 w-6 text-muted-foreground" />
+          )}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <h4 className="text-sm font-medium truncate">{item.title}</h4>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-medium truncate">{item.title}</h4>
+                {isBlocked && (
+                  <Badge variant="destructive" className="text-[10px] px-1 py-0">
+                    BLOCKED
+                  </Badge>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">{item.merchant}</p>
             </div>
             <span className="text-sm font-semibold shrink-0">

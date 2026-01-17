@@ -6,9 +6,11 @@ import { CartPanel } from '@/components/demo/CartPanel';
 import { ExplainPanel } from '@/components/demo/ExplainPanel';
 import { AuditPreviewPanel } from '@/components/demo/AuditPreviewPanel';
 import { PasskeyConsentModal } from '@/components/demo/PasskeyConsentModal';
+import { VoiceExplainer } from '@/components/VoiceExplainer';
 import { useAuditLog } from '@/hooks/useAuditLog';
 import { loadLastIntent, saveLastIntent, loadPermissionPolicy } from '@/lib/storage';
 import { authorizePasskey, generateBundle, explainBundle, shopifyCartCreate, shopifyCartLinesAdd } from '@/lib/api';
+import { checkAuthority, getPolicy, type AgentPolicy } from '@/lib/backendApi';
 import type { 
   IntentForm, 
   BundleResult, 
@@ -40,20 +42,44 @@ export default function DemoPage() {
   // Audit log
   const { events, addEvent, getRecentEvents } = useAuditLog();
 
+  // Authority layer state
+  const [blockedItems, setBlockedItems] = useState<string[]>([]);
+  const [policy, setPolicy] = useState<AgentPolicy | null>(null);
+  
+  // Voice explainer state
+  const [showVoiceExplainer, setShowVoiceExplainer] = useState(true);
+  const [voiceExplanation, setVoiceExplanation] = useState<string>('');
+
   // Sync intent form to localStorage
   useEffect(() => {
     saveLastIntent(intentForm);
   }, [intentForm]);
 
-  // Sync with permission policy from settings
+  // Sync with permission policy from backend authority layer
   useEffect(() => {
-    const policy = loadPermissionPolicy();
-    setIntentForm(prev => ({
-      ...prev,
-      maxSpend: policy.maxSpend,
-      allowedCategories: policy.allowedCategories,
-      agentEnabled: policy.agentEnabled,
-    }));
+    const loadPolicyFromBackend = async () => {
+      try {
+        const data = await getPolicy();
+        setPolicy(data.policy);
+        setIntentForm(prev => ({
+          ...prev,
+          maxSpend: data.policy.maxSpend,
+          allowedCategories: data.policy.allowedCategories,
+          agentEnabled: data.policy.agentEnabled,
+        }));
+      } catch (e) {
+        // Fallback to local storage if backend unavailable
+        const localPolicy = loadPermissionPolicy();
+        setIntentForm(prev => ({
+          ...prev,
+          maxSpend: localPolicy.maxSpend,
+          allowedCategories: localPolicy.allowedCategories,
+          agentEnabled: localPolicy.agentEnabled,
+        }));
+      }
+    };
+    
+    loadPolicyFromBackend();
   }, []);
 
   const handleGenerate = useCallback(() => {
@@ -68,6 +94,34 @@ export default function DemoPage() {
 
     if (result.success) {
       setPasskeyState('success');
+      
+      // Authority check before generating bundle
+      try {
+        const authorityCheck = await checkAuthority({
+          action: 'recommendBundle',
+          cartTotal: 0,
+          categories: intentForm.allowedCategories,
+          meta: { maxSpend: intentForm.maxSpend, intent: intentForm.shoppingIntent },
+        });
+
+        if (authorityCheck.decision === 'BLOCK') {
+          setPasskeyState('failed');
+          addEvent('AUTHORITY_BLOCKED', authorityCheck.reason, {
+            maxSpend: intentForm.maxSpend,
+            allowedCategories: intentForm.allowedCategories,
+          });
+          setVoiceExplanation(authorityCheck.reason);
+          toast({
+            title: 'Action blocked by policy',
+            description: authorityCheck.reason,
+            variant: 'destructive',
+          });
+          setTimeout(() => setShowPasskeyModal(false), 1500);
+          return;
+        }
+      } catch (e) {
+        console.log('Authority check unavailable, proceeding with local validation');
+      }
       
       addEvent('CONSENT_GRANTED', 'User authorized bundle generation via passkey', {
         maxSpend: intentForm.maxSpend,
@@ -159,6 +213,35 @@ export default function DemoPage() {
   const handleCreateCart = useCallback(async () => {
     setCart(prev => ({ ...prev, isCreating: true }));
     
+    // Authority check before creating cart
+    try {
+      const authorityCheck = await checkAuthority({
+        action: 'cartCreate',
+        cartTotal: bundle?.subtotal || 0,
+        categories: bundle?.items.map(i => i.category || 'general') || [],
+        items: bundle?.items.map(i => ({
+          id: i.id,
+          title: i.title,
+          price: i.price,
+          category: i.category || 'general',
+          qty: i.qty,
+        })) || [],
+      });
+
+      if (authorityCheck.decision === 'BLOCK') {
+        setCart(prev => ({ ...prev, isCreating: false }));
+        addEvent('AUTHORITY_BLOCKED', authorityCheck.reason, {});
+        toast({
+          title: 'Cart creation blocked',
+          description: authorityCheck.reason,
+          variant: 'destructive',
+        });
+        return;
+      }
+    } catch (e) {
+      console.log('Authority check unavailable, proceeding');
+    }
+    
     try {
       const result = await shopifyCartCreate();
       setCart(prev => ({ ...prev, cartId: result.cartId, isCreating: false }));
@@ -177,12 +260,47 @@ export default function DemoPage() {
         variant: 'destructive',
       });
     }
-  }, [addEvent]);
+  }, [addEvent, bundle]);
 
   const handleAddLines = useCallback(async () => {
     if (!cart.cartId || !bundle) return;
     
     setCart(prev => ({ ...prev, isAddingLines: true }));
+    
+    // Authority check before adding lines
+    try {
+      const authorityCheck = await checkAuthority({
+        action: 'addToCart',
+        cartTotal: bundle.subtotal,
+        categories: bundle.items.map(i => i.category || 'general'),
+        items: bundle.items.map(i => ({
+          id: i.id,
+          title: i.title,
+          price: i.price,
+          category: i.category || 'general',
+          qty: i.qty,
+        })),
+      });
+
+      if (authorityCheck.decision === 'BLOCK') {
+        setCart(prev => ({ ...prev, isAddingLines: false }));
+        // Track blocked items
+        if (authorityCheck.blockedItems) {
+          setBlockedItems(authorityCheck.blockedItems.map((b: any) => b.id || b));
+        }
+        addEvent('AUTHORITY_BLOCKED', authorityCheck.reason, {});
+        toast({
+          title: 'Items blocked by policy',
+          description: authorityCheck.reason,
+          variant: 'destructive',
+        });
+        return;
+      } else {
+        setBlockedItems([]);
+      }
+    } catch (e) {
+      console.log('Authority check unavailable, proceeding');
+    }
     
     try {
       const lines = bundle.items.map(item => ({
@@ -214,30 +332,75 @@ export default function DemoPage() {
     }
   }, [cart.cartId, bundle, addEvent]);
 
-  const handleOpenCheckout = useCallback(() => {
-    if (cart.checkoutUrl) {
-      // In a real app, this would open the Shopify checkout
-      window.open(cart.checkoutUrl, '_blank', 'noopener,noreferrer');
+  const handleOpenCheckout = useCallback(async () => {
+    if (!cart.checkoutUrl || !bundle) return;
+    
+    // Authority check before checkout - enforces requireConfirm
+    try {
+      const authorityCheck = await checkAuthority({
+        action: 'checkoutStart',
+        cartTotal: bundle.subtotal,
+        categories: bundle.items.map(i => i.category || 'general'),
+        items: bundle.items.map(i => ({
+          id: i.id,
+          title: i.title,
+          price: i.price,
+          category: i.category || 'general',
+          qty: i.qty,
+        })),
+        meta: { checkoutUrl: cart.checkoutUrl },
+      });
+
+      if (authorityCheck.decision === 'BLOCK') {
+        addEvent('CHECKOUT_BLOCKED', authorityCheck.reason, {});
+        toast({
+          title: 'Checkout blocked',
+          description: authorityCheck.reason,
+          variant: 'destructive',
+        });
+        return;
+      }
+      
+      addEvent('CHECKOUT_APPROVED', 'User confirmed checkout', {});
+    } catch (e) {
+      console.log('Authority check unavailable, proceeding with user click');
     }
-  }, [cart.checkoutUrl]);
+    
+    // In a real app, this would open the Shopify checkout
+    window.open(cart.checkoutUrl, '_blank', 'noopener,noreferrer');
+  }, [cart.checkoutUrl, bundle, addEvent]);
 
   const handleExplain = useCallback(async () => {
-    if (!bundle) return;
+    if (!bundle) {
+      console.log('No bundle available');
+      return;
+    }
     
     setIsExplaining(true);
+    console.log('Generating explanation...');
     
     try {
       const result = await explainBundle({
         intent: intentForm.shoppingIntent,
         bundle,
       });
+      
+      console.log('Explanation result:', result);
+      
       setExplanation(result);
+      setVoiceExplanation(result.text);
       
       addEvent('EXPLANATION_GENERATED', 'Agent explained its reasoning', {}, { hasAudio: !!result.audioUrl });
+      
+      toast({
+        title: 'Explanation generated',
+        description: 'Playing explanation now',
+      });
     } catch (error) {
+      console.error('Error generating explanation:', error);
       toast({
         title: 'Failed to generate explanation',
-        description: 'Please try again',
+        description: error instanceof Error ? error.message : 'Please try again',
         variant: 'destructive',
       });
     } finally {
@@ -264,6 +427,7 @@ export default function DemoPage() {
           <BundleResultPanel
             bundle={bundle}
             maxSpend={intentForm.maxSpend}
+            blockedItems={blockedItems}
             onUpdateQuantity={handleUpdateQuantity}
             onRemoveItem={handleRemoveItem}
           />
@@ -295,6 +459,14 @@ export default function DemoPage() {
         onCancel={handlePasskeyCancel}
         onRetry={handlePasskeyRetry}
       />
+
+      {/* Voice Explainer - Top right */}
+      {showVoiceExplainer && (
+        <VoiceExplainer 
+          explanation={voiceExplanation || explanation?.reasoning}
+          onClose={() => setShowVoiceExplainer(false)}
+        />
+      )}
     </DashboardLayout>
   );
 }
