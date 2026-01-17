@@ -59,6 +59,7 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
   };
 
   const handleCameraConfirm = async (base64Data: string) => {
+    setShowCameraModal(false);  // Close modal immediately
     setIsGeneratingAvatar(true);
     try {
       console.log('Generating bitmoji avatar from camera photo...');
@@ -75,7 +76,6 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
       console.error('Avatar generation failed:', error);
     } finally {
       setIsGeneratingAvatar(false);
-      setShowCameraModal(false);
     }
   };
 
