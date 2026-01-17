@@ -151,10 +151,10 @@ export function IntentFormPanel({
               <Input
                 id="budget"
                 type="number"
-                min={1}
+                min={0}
                 max={10000}
-                value={policy?.maxSpend ?? 0}
-                onChange={(e) => handlePolicyChange({ maxSpend: Math.max(0, Number(e.target.value)) })}
+                value={policy?.maxSpend ?? ''}
+                onChange={(e) => handlePolicyChange({ maxSpend: Number(e.target.value) || 0 })}
                 className="w-32"
               />
             </div>
