@@ -50,7 +50,7 @@ async def synthesize_voice(request: VoiceRequest):
     
     payload = {
         "text": request.text,
-        "model_id": "eleven_monolingual_v1",
+        "model_id": "eleven_turbo_v2",
         "voice_settings": {
             "stability": 0.5,
             "similarity_boost": 0.75,

@@ -2,7 +2,6 @@ import { Link, useLocation } from 'react-router-dom';
 import { Shield, Home, Settings, FileText, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { AuthorityPanel } from '@/components/AuthorityPanel';
 
 const navItems = [
   { path: '/demo', label: 'Demo', icon: Home },
@@ -102,9 +101,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <main className="container mx-auto px-4 py-6">
         {children}
       </main>
-
-      {/* Authority Panel - Collapsible Sidebar */}
-      <AuthorityPanel />
     </div>
   );
 }
