@@ -5,6 +5,7 @@ export interface PermissionPolicy {
   allowedCategories: string[];
   agentEnabled: boolean;
   merchantId?: string;
+  requireConfirm?: boolean; // Require user confirmation for checkout
 }
 
 export interface BundleItem {
