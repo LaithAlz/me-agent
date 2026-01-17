@@ -27,6 +27,7 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
   const [showCameraModal, setShowCameraModal] = useState(false);
+  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -79,29 +80,17 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setIsGeneratingAvatar(true);
     try {
-      // Convert image to base64
+      // Convert image to base64 and open modal for cropping
       const reader = new FileReader();
-      reader.onloadend = async () => {
+      reader.onloadend = () => {
         const base64String = reader.result as string;
-        const base64Data = base64String.split(',')[1]; // Remove data:image/jpeg;base64, prefix
-
-        console.log('Generating bitmoji avatar from photo...');
-        const result = await generateAvatar(base64Data, 'bitmoji');
-        
-        if (result.success && result.avatarBase64) {
-          console.log('Avatar generated successfully');
-          setAvatarUrl(`data:image/jpeg;base64,${result.avatarBase64}`);
-        } else {
-          console.error('Avatar generation failed:', result.error);
-        }
+        setUploadedImage(base64String);
+        setShowCameraModal(true);
       };
       reader.readAsDataURL(file);
     } catch (error) {
       console.error('Photo upload failed:', error);
-    } finally {
-      setIsGeneratingAvatar(false);
     }
   };
 
@@ -238,9 +227,13 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
       {/* Camera Modal */}
       <CameraModal
         open={showCameraModal}
-        onClose={() => setShowCameraModal(false)}
+        onClose={() => {
+          setShowCameraModal(false);
+          setUploadedImage(null);
+        }}
         onConfirm={handleCameraConfirm}
         isLoading={isGeneratingAvatar}
+        initialImage={uploadedImage}
       />
       
       {/* Top-right floating card */}

@@ -12,9 +12,10 @@ interface CameraModalProps {
   onClose: () => void;
   onConfirm: (base64: string) => void;
   isLoading?: boolean;
+  initialImage?: string; // Pre-loaded image (for upload mode)
 }
 
-export function CameraModal({ open, onClose, onConfirm, isLoading }: CameraModalProps) {
+export function CameraModal({ open, onClose, onConfirm, isLoading, initialImage }: CameraModalProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -23,9 +24,19 @@ export function CameraModal({ open, onClose, onConfirm, isLoading }: CameraModal
   const [cropX, setCropX] = useState(0);
   const [cropY, setCropY] = useState(0);
 
+  // Set upload mode based on initialImage
+  const isUploadMode = !!initialImage;
+
+  // Initialize captured image when modal opens with initialImage
+  useEffect(() => {
+    if (open && initialImage) {
+      setCaptured(initialImage);
+    }
+  }, [open, initialImage]);
+
   // Start camera on mount
   useEffect(() => {
-    if (!open) return;
+    if (!open || isUploadMode) return; // Skip if upload mode or modal closed
 
     const startCamera = async () => {
       try {
@@ -49,7 +60,7 @@ export function CameraModal({ open, onClose, onConfirm, isLoading }: CameraModal
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [open]);
+  }, [open, isUploadMode]);
 
   const handleCapture = () => {
     if (!videoRef.current || !canvasRef.current) return;
@@ -140,39 +151,47 @@ export function CameraModal({ open, onClose, onConfirm, isLoading }: CameraModal
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{captured ? 'Crop & Confirm' : 'Take a Photo'}</DialogTitle>
+          <DialogTitle>{captured ? 'Crop & Confirm' : isUploadMode ? 'Adjust Photo' : 'Take a Photo'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           {!captured ? (
             <>
-              {/* Camera Preview */}
-              <div className="relative w-full bg-black rounded-lg overflow-hidden aspect-video">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  className="w-full h-full object-cover"
-                />
-              </div>
+              {/* Camera Preview or Upload Mode */}
+              {!isUploadMode ? (
+                <>
+                  {/* Camera Preview */}
+                  <div className="relative w-full bg-black rounded-lg overflow-hidden aspect-video">
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
 
-              {/* Capture Button */}
-              <Button
-                onClick={handleCapture}
-                className="w-full"
-                size="lg"
-              >
-                Capture Photo
-              </Button>
+                  {/* Capture Button */}
+                  <Button
+                    onClick={handleCapture}
+                    className="w-full"
+                    size="lg"
+                  >
+                    Capture Photo
+                  </Button>
+                </>
+              ) : (
+                /* Upload mode - just show the image for cropping */
+                <p className="text-sm text-muted-foreground text-center">Image loaded. Click below to crop.</p>
+              )}
             </>
           ) : (
             <>
               {/* Captured Image Preview with Crop Controls */}
-              <div className="relative w-full bg-gray-100 rounded-lg overflow-hidden aspect-video flex items-center justify-center">
+              <div className="relative w-full bg-gray-100 rounded-lg overflow-auto flex items-center justify-center max-h-96">
                 <img
                   src={captured}
                   alt="Captured"
-                  className="w-full h-full object-cover"
+                  className="w-full h-auto object-contain"
                   style={{
                     transform: `scale(${zoom / 100}) translate(${cropX}px, ${cropY}px)`,
                   }}
