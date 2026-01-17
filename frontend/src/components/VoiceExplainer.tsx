@@ -53,7 +53,6 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
   };
 
   const handleTakePhoto = async () => {
-    setUploadedImage(null);
     setShowCameraModal(true);
   };
 
