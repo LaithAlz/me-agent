@@ -16,6 +16,7 @@ class AvatarGenerateResponse(BaseModel):
     """Response with generated avatar."""
     success: bool
     avatarBase64: Optional[str] = Field(None, description="Base64-encoded generated avatar")
+    avatarFormat: str = Field(default="jpeg", description="Image format (jpeg or svg+xml)")
     style: str
     error: Optional[str] = None
 
@@ -24,5 +25,6 @@ class AvatarGetResponse(BaseModel):
     """Response with user's current avatar."""
     hasAvatar: bool
     avatarBase64: Optional[str] = None
+    avatarFormat: str = Field(default="jpeg", description="Image format (jpeg or svg+xml)")
     style: Optional[str] = None
     createdAt: Optional[str] = None

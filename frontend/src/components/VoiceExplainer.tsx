@@ -38,7 +38,8 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
       try {
         const data = await getAvatar();
         if (data.hasAvatar && data.avatarBase64) {
-          setAvatarUrl(`data:image/jpeg;base64,${data.avatarBase64}`);
+          const mimeType = data.avatarFormat === 'svg+xml' ? 'image/svg+xml' : 'image/jpeg';
+          setAvatarUrl(`data:${mimeType};base64,${data.avatarBase64}`);
         }
       } catch (e) {
         console.error('Failed to load avatar:', e);
@@ -53,6 +54,7 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
   };
 
   const handleTakePhoto = async () => {
+    setUploadedImage(null);
     setShowCameraModal(true);
   };
 
@@ -64,7 +66,8 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
       
       if (result.success && result.avatarBase64) {
         console.log('Avatar generated successfully');
-        setAvatarUrl(`data:image/jpeg;base64,${result.avatarBase64}`);
+        const mimeType = result.avatarFormat === 'svg+xml' ? 'image/svg+xml' : 'image/jpeg';
+        setAvatarUrl(`data:${mimeType};base64,${result.avatarBase64}`);
       } else {
         console.error('Avatar generation failed:', result.error);
       }

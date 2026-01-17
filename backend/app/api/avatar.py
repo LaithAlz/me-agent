@@ -66,8 +66,8 @@ async def generate_avatar(
                 error="Invalid base64 image data",
             )
         
-        # Use Gemini to analyze the image and describe avatar features
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Use Gemini's image generation model to create a bitmoji
+        model = genai.GenerativeModel('gemini-2.5-flash-image')
         
         # Create the image part for Gemini
         image_part = {
@@ -75,48 +75,45 @@ async def generate_avatar(
             "data": request.imageBase64,
         }
         
-        prompt = f"""Analyze this photo of a person and create a detailed description for generating a {request.style}-style cartoon avatar.
-
-Describe these features in a structured way:
-1. Face shape (round, oval, square, heart)
-2. Hair style and color
-3. Eye shape and color
-4. Skin tone
-5. Any distinctive features (glasses, facial hair, accessories)
-6. Expression/mood
-
-Then provide a single-line prompt that could be used to generate a {request.style}-style avatar matching this person.
-
-Format your response as:
-FEATURES:
-[feature descriptions]
-
-AVATAR_PROMPT:
-[single line prompt for avatar generation]"""
+        prompt = "Generate a bitmoji of this person. Make the background a solid colour."
 
         response = model.generate_content([prompt, image_part])
         
-        # For now, we'll store the description and use a placeholder
-        # In production, you'd use Imagen or another image generation API
-        avatar_description = response.text
+        # Check if we got an image in the response
+        if response.candidates and len(response.candidates) > 0:
+            candidate = response.candidates[0]
+            if hasattr(candidate.content, 'parts') and len(candidate.content.parts) > 0:
+                for part in candidate.content.parts:
+                    if hasattr(part, 'inline_data') and part.inline_data:
+                        # Extract the generated image
+                        generated_image_data = part.inline_data.data
+                        generated_image_base64 = base64.b64encode(generated_image_data).decode('utf-8')
+                        
+                        # Store the generated avatar
+                        await save_avatar(user_id, generated_image_base64, request.style)
+                        
+                        return AvatarGenerateResponse(
+                            success=True,
+                            avatarBase64=generated_image_base64,
+                            avatarFormat="jpeg",
+                            style=request.style,
+                            error=None,
+                        )
         
-        # Store the avatar (for now, store the description + original image)
-        # In production, you'd generate an actual cartoon image
-        await save_avatar(user_id, request.imageBase64, request.style)
-        
-        # Return success with the original image (frontend can apply CSS filters)
-        # In production, you'd return the generated cartoon avatar
+        # If no image was generated, return error
         return AvatarGenerateResponse(
-            success=True,
-            avatarBase64=request.imageBase64,  # Return original for now
+            success=False,
+            avatarBase64=None,
+            avatarFormat="jpeg",
             style=request.style,
-            error=None,
+            error="Failed to generate bitmoji image from Gemini",
         )
         
     except Exception as e:
         return AvatarGenerateResponse(
             success=False,
             avatarBase64=None,
+            avatarFormat="jpeg",
             style=request.style,
             error=f"Avatar generation failed: {str(e)}",
         )
@@ -135,6 +132,7 @@ async def get_user_avatar(meagent_user: Optional[str] = Cookie(None)):
         return AvatarGetResponse(
             hasAvatar=True,
             avatarBase64=avatar.get("avatar"),
+            avatarFormat=avatar.get("format", "jpeg"),
             style=avatar.get("style"),
             createdAt=avatar.get("createdAt"),
         )
