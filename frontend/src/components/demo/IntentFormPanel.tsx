@@ -114,19 +114,20 @@ export function IntentFormPanel({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-primary" />
-          Intent + Constraints
+          Intent and Constraints
         </CardTitle>
         <CardDescription>
-          Tell the agent what you're looking for and set your boundaries
+          Tell the agent what you are looking for and set your boundaries
         </CardDescription>
       </CardHeader>
+
       <CardContent className="space-y-6">
         {/* Shopping Intent */}
         <div className="space-y-2">
           <Label htmlFor="intent">What do you want to buy?</Label>
           <Textarea
             id="intent"
-            placeholder="e.g., I need to set up a home office with ergonomic equipment..."
+            placeholder="e.g. I need to set up a home office with ergonomic equipment."
             value={form.shoppingIntent}
             onChange={(e) => updateField('shoppingIntent', e.target.value)}
             rows={3}
@@ -207,15 +208,21 @@ export function IntentFormPanel({
           <Label>Brand Preferences (optional)</Label>
           <div className="flex gap-2">
             <Input
-              placeholder="Add a brand..."
+              placeholder="Add a brand."
               value={brandInput}
               onChange={(e) => setBrandInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addBrand())}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  addBrand();
+                }
+              }}
             />
             <Button type="button" variant="outline" size="icon" onClick={addBrand}>
               <Plus className="h-4 w-4" />
             </Button>
           </div>
+
           {form.brandPreferences.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
               {form.brandPreferences.map(brand => (
@@ -246,6 +253,7 @@ export function IntentFormPanel({
               {form.priceSensitivity === 5 && 'Premium only'}
             </span>
           </div>
+
           <Slider
             value={[form.priceSensitivity]}
             onValueChange={([v]) => updateField('priceSensitivity', v)}
@@ -253,6 +261,7 @@ export function IntentFormPanel({
             max={5}
             step={1}
           />
+
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>Budget</span>
             <span>Premium</span>
@@ -280,7 +289,10 @@ export function IntentFormPanel({
           {policy && (
             <>
               <PermissionChip label={`$${policy.maxSpend} max`} active />
-              <PermissionChip label={`${policy.allowedCategories.length} categories`} active={policy.allowedCategories.length > 0} />
+              <PermissionChip
+            label={`${policy.allowedCategories.length} categories`}
+            active={policy.allowedCategories.length > 0}
+          />
               <PermissionChip label="Agent" active={policy.agentEnabled} />
             </>
           )}
@@ -294,8 +306,9 @@ export function IntentFormPanel({
             className="flex-1"
           >
             <Sparkles className="h-4 w-4 mr-2" />
-            {isGenerating ? 'Generating...' : 'Generate Shopping Bundle'}
+            {isGenerating ? 'Generating...' : 'Generate Recommendations'}
           </Button>
+
           <Button variant="outline" onClick={onReset}>
             <RotateCcw className="h-4 w-4" />
           </Button>
@@ -306,7 +319,7 @@ export function IntentFormPanel({
           <div className="p-3 rounded-lg bg-warning/10 border border-warning/30 text-sm">
             <p className="flex items-center gap-2 text-warning">
               <AlertCircle className="h-4 w-4" />
-              Agent is disabled. Enable above to generate bundles.
+              Agent is disabled. Enable above to generate recommendations.
             </p>
           </div>
         ) : (

@@ -1,160 +1,285 @@
-// Me-Agent API Client - Mock implementations for demo
-import type { 
-  BundleResult, 
-  ExplainResult, 
-  IntentForm,
-  BundleItem 
-} from '@/types';
+// Me-Agent API Client (Vite)
+// - Calls FastAPI: /recommend and /feedback
+// - Adapts backend cart JSON into your UI BundleResult shape
+// - Keeps passkey demo helpers and Shopify helpers
+
+import type { BundleResult, ExplainResult, IntentForm } from '@/types'
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
 // Simulated delay for realistic UX
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-// Mock product database
-const MOCK_PRODUCTS: Record<string, BundleItem[]> = {
-  office: [
-    { id: 'off-1', title: 'Ergonomic Desk Chair', price: 89.99, category: 'office', merchant: 'OfficePro', reasonTags: ['Matches category', 'Top rated'], qty: 1 },
-    { id: 'off-2', title: 'Standing Desk Converter', price: 45.00, category: 'office', merchant: 'DeskMaster', reasonTags: ['Matches category', 'Within budget'], qty: 1 },
-    { id: 'off-3', title: 'LED Desk Lamp', price: 28.50, category: 'office', merchant: 'LightCo', reasonTags: ['Matches category', 'Energy efficient'], qty: 1 },
-    { id: 'off-4', title: 'Wireless Keyboard', price: 34.99, category: 'office', merchant: 'TechGear', reasonTags: ['Matches category', 'Bluetooth'], qty: 1 },
-  ],
-  electronics: [
-    { id: 'elec-1', title: 'Wireless Mouse', price: 29.99, category: 'electronics', merchant: 'TechGear', reasonTags: ['Matches category', 'Ergonomic'], qty: 1 },
-    { id: 'elec-2', title: 'USB-C Hub', price: 39.99, category: 'electronics', merchant: 'ConnectPlus', reasonTags: ['Matches category', 'Multi-port'], qty: 1 },
-    { id: 'elec-3', title: 'Webcam HD', price: 59.00, category: 'electronics', merchant: 'VideoTech', reasonTags: ['Matches category', '1080p'], qty: 1 },
-  ],
-  clothing: [
-    { id: 'cloth-1', title: 'Cotton T-Shirt Pack', price: 24.99, category: 'clothing', merchant: 'BasicWear', reasonTags: ['Matches category', 'Comfort fit'], qty: 1 },
-    { id: 'cloth-2', title: 'Denim Jeans', price: 49.99, category: 'clothing', merchant: 'DenimCo', reasonTags: ['Matches category', 'Classic style'], qty: 1 },
-  ],
-  home: [
-    { id: 'home-1', title: 'Smart Thermostat', price: 79.99, category: 'home', merchant: 'SmartHome', reasonTags: ['Matches category', 'Energy saving'], qty: 1 },
-    { id: 'home-2', title: 'Air Purifier', price: 65.00, category: 'home', merchant: 'CleanAir', reasonTags: ['Matches category', 'HEPA filter'], qty: 1 },
-  ],
-  sports: [
-    { id: 'sport-1', title: 'Yoga Mat', price: 22.99, category: 'sports', merchant: 'FitGear', reasonTags: ['Matches category', 'Non-slip'], qty: 1 },
-    { id: 'sport-2', title: 'Resistance Bands Set', price: 18.50, category: 'sports', merchant: 'FitGear', reasonTags: ['Matches category', '5 levels'], qty: 1 },
-  ],
-  books: [
-    { id: 'book-1', title: 'Productivity Handbook', price: 15.99, category: 'books', merchant: 'BookStore', reasonTags: ['Matches category', 'Bestseller'], qty: 1 },
-  ],
-  beauty: [
-    { id: 'beauty-1', title: 'Skincare Set', price: 35.00, category: 'beauty', merchant: 'GlowUp', reasonTags: ['Matches category', 'Organic'], qty: 1 },
-  ],
-  food: [
-    { id: 'food-1', title: 'Organic Snack Box', price: 28.99, category: 'food', merchant: 'HealthyBites', reasonTags: ['Matches category', 'No preservatives'], qty: 1 },
-  ],
-};
+async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options?.headers ?? {}),
+    },
+    ...options,
+  })
 
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(errorText || `Request failed: ${response.status}`)
+  }
+
+  return response.json() as Promise<T>
+}
+
+// -------------------------------
 // Demo toggle for passkey success/failure
-let passkeyWillSucceed = true;
+// -------------------------------
+let passkeyWillSucceed = true
 
 export function setPasskeyDemoMode(willSucceed: boolean) {
-  passkeyWillSucceed = willSucceed;
+  passkeyWillSucceed = willSucceed
 }
 
 export async function authorizePasskey(): Promise<{ success: boolean; error?: string }> {
-  await delay(1500); // Simulate biometric check
-  
-  if (passkeyWillSucceed) {
-    return { success: true };
-  } else {
-    return { success: false, error: 'Passkey verification failed. Please try again.' };
+  await delay(1500)
+  if (passkeyWillSucceed) return { success: true }
+  return { success: false, error: 'Passkey verification failed. Please try again.' }
+}
+
+// -------------------------------
+// Backend contract types
+// -------------------------------
+export type Product = {
+  name: string
+  price: number
+  brand: string
+  tags: string[]
+}
+
+export type RecommendRequest = {
+  // backend supports either user_id or userId
+  user_id?: string
+  userId?: string
+
+  products: Product[]
+
+  // legacy
+  context?: string
+  max_total?: number
+
+  // new frontend fields
+  shoppingIntent?: string
+  allowedCategories?: string[]
+  brandPreferences?: string[]
+  maxSpend?: number
+  priceSensitivity?: number
+  agentEnabled?: boolean
+}
+
+export type RecommendResponse = {
+  cart: string // JSON string
+  explanation: string
+}
+
+export type FeedbackRequest = {
+  user_id: string
+  rejected_items: string[]
+  reason: string
+}
+
+export type FeedbackResponse = {
+  status: string
+}
+
+// -------------------------------
+// Helpers
+// -------------------------------
+function slugify(s: string) {
+  return (s || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+}
+
+function safeJsonParse<T>(s: string): T | null {
+  try {
+    return JSON.parse(s) as T
+  } catch {
+    return null
   }
 }
 
-export async function generateBundle(payload: IntentForm): Promise<BundleResult> {
-  await delay(1200); // Simulate AI processing
-  
-  const { allowedCategories, maxSpend, brandPreferences } = payload;
-  
-  // Collect products from allowed categories
-  let availableProducts: BundleItem[] = [];
-  for (const category of allowedCategories) {
-    const products = MOCK_PRODUCTS[category] || [];
-    availableProducts = [...availableProducts, ...products];
-  }
-  
-  // Add brand preference tags if specified
-  if (brandPreferences.length > 0) {
-    availableProducts = availableProducts.map(p => ({
-      ...p,
-      reasonTags: brandPreferences.some(b => 
-        p.merchant.toLowerCase().includes(b.toLowerCase()) ||
-        p.title.toLowerCase().includes(b.toLowerCase())
-      )
-        ? [...p.reasonTags, 'Brand preference']
-        : p.reasonTags,
-    }));
-  }
-  
-  // Select items that fit within budget
-  let selectedItems: BundleItem[] = [];
-  let subtotal = 0;
-  
-  for (const product of availableProducts) {
-    if (subtotal + product.price <= maxSpend) {
-      selectedItems.push({ ...product, id: `${product.id}-${Date.now()}` });
-      subtotal += product.price;
+type BackendCart = {
+  items?: Array<{
+    name?: string
+    title?: string
+    brand?: string
+    merchant?: string
+    price?: number
+    qty?: number
+    tags?: string[]
+    merchandiseId?: string
+    id?: string
+  }>
+  total?: number
+  notes?: string
+}
+
+// Adapt backend cart -> UI BundleResult
+function adaptCartToBundle(cartJson: string): BundleResult {
+  const parsed = safeJsonParse<BackendCart>(cartJson)
+
+  const rawItems = Array.isArray(parsed?.items) ? parsed!.items! : []
+
+  const items = rawItems.map((it, idx) => {
+    const title = (it.name || it.title || 'Item').trim()
+    const merchant = (it.brand || it.merchant || 'Unknown').trim()
+    const price = Number(it.price ?? 0)
+    const qty = Number(it.qty ?? 1)
+    const reasonTags = Array.isArray(it.tags) ? it.tags : []
+
+    const id =
+      (typeof it.id === 'string' && it.id.length ? it.id : null) ??
+      (typeof it.merchandiseId === 'string' && it.merchandiseId.length ? it.merchandiseId : null) ??
+      `${slugify(merchant)}-${slugify(title)}-${idx}`
+
+    return {
+      id,
+      title,
+      merchant,
+      price,
+      qty,
+      reasonTags,
+      // Optional fields your app may later use
+      merchandiseId: it.merchandiseId,
     }
-    if (selectedItems.length >= 6) break;
-  }
-  
-  // Ensure at least 3 items if possible
-  if (selectedItems.length < 3 && availableProducts.length >= 3) {
-    selectedItems = availableProducts.slice(0, 3).map(p => ({
-      ...p,
-      id: `${p.id}-${Date.now()}`,
-    }));
-    subtotal = selectedItems.reduce((sum, item) => sum + item.price, 0);
-  }
-  
-  return {
-    items: selectedItems,
-    subtotal: Math.round(subtotal * 100) / 100,
+  })
+
+  const subtotal =
+    typeof parsed?.total === 'number'
+      ? Number(parsed.total)
+      : Math.round(items.reduce((sum, it) => sum + it.price * it.qty, 0) * 100) / 100
+
+  const bundle: BundleResult = {
+    // Your UI expects these keys
+    items,
+    subtotal,
     currency: 'USD',
-  };
+    // If your BundleResult type has extra required fields, add them here
+  } as BundleResult
+
+  return bundle
 }
 
-export async function explainBundle(payload: { 
-  intent: string; 
-  bundle: BundleResult;
-}): Promise<ExplainResult> {
-  await delay(800);
-  
-  const itemCount = payload.bundle.items.length;
-  const categories = [...new Set(payload.bundle.items.map(i => i.category))];
-  
-  const text = `Based on your shopping intent "${payload.intent.slice(0, 50)}${payload.intent.length > 50 ? '...' : ''}", I've curated a bundle of ${itemCount} items across ${categories.length} ${categories.length === 1 ? 'category' : 'categories'}: ${categories.join(', ')}.
+function buildContext(form: IntentForm) {
+  const parts: string[] = []
+  const anyForm = form as any
 
-Each item was selected because it:
-• Falls within your allowed categories
-• Stays within your budget of $${payload.bundle.subtotal.toFixed(2)}
-• Matches your stated preferences and price sensitivity
+  if (typeof anyForm.shoppingIntent === 'string' && anyForm.shoppingIntent.trim()) {
+    parts.push(anyForm.shoppingIntent.trim())
+  }
 
-The total comes to $${payload.bundle.subtotal.toFixed(2)}, leaving room in your budget for any adjustments. All items are from verified merchants with strong ratings.
+  if (Array.isArray(anyForm.allowedCategories) && anyForm.allowedCategories.length) {
+    parts.push(`Allowed categories: ${anyForm.allowedCategories.join(', ')}`)
+  }
 
-Remember: You have full control. Review each item, adjust quantities, and only proceed to checkout when you're ready. No purchases will be made without your explicit approval.`;
+  if (Array.isArray(anyForm.brandPreferences) && anyForm.brandPreferences.length) {
+    parts.push(`Brand preferences: ${anyForm.brandPreferences.join(', ')}`)
+  }
 
-  // 50% chance of having audio available
-  const hasAudio = Math.random() > 0.5;
-  
-  return {
-    text,
-    audioUrl: hasAudio ? 'https://example.com/audio/explanation.mp3' : undefined,
-  };
+  if (typeof anyForm.priceSensitivity === 'number') {
+    parts.push(`Price sensitivity: ${anyForm.priceSensitivity}/5`)
+  }
+
+  return parts.filter(Boolean).join(' | ')
 }
 
+function getMaxTotal(form: IntentForm): number {
+  const anyForm = form as any
+  if (typeof anyForm.maxSpend === 'number') return anyForm.maxSpend
+  if (typeof anyForm.max_total === 'number') return anyForm.max_total
+  if (typeof anyForm.budget === 'number') return anyForm.budget
+  return 500
+}
+
+// -------------------------------
+// API calls
+// -------------------------------
+export async function recommendBundle(payload: RecommendRequest): Promise<RecommendResponse> {
+  await delay(200)
+  return apiRequest<RecommendResponse>('/api/agent/recommend', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+// Preferred for DemoPage: returns bundle + explanation string from backend
+export async function generateBundleWithExplain(
+  payload: IntentForm & { userId: string; products: Product[] }
+): Promise<{ bundle: BundleResult; explanation: string }> {
+  await delay(200)
+
+  const req: RecommendRequest = {
+    userId: payload.userId,
+    products: payload.products,
+
+    // Pass new fields through so backend can use them directly
+    shoppingIntent: (payload as any).shoppingIntent,
+    allowedCategories: (payload as any).allowedCategories,
+    brandPreferences: (payload as any).brandPreferences,
+    maxSpend: (payload as any).maxSpend,
+    priceSensitivity: (payload as any).priceSensitivity,
+    agentEnabled: (payload as any).agentEnabled,
+
+    // Still fill these as fallback
+    context: buildContext(payload),
+    max_total: getMaxTotal(payload),
+  }
+
+  const resp = await recommendBundle(req)
+  const bundle = adaptCartToBundle(resp.cart)
+
+  return { bundle, explanation: resp.explanation }
+}
+
+// Keep the old signature available if other parts still call it
+export async function generateBundle(
+  payload: IntentForm & { userId: string; products: Product[] }
+): Promise<BundleResult> {
+  const { bundle } = await generateBundleWithExplain(payload)
+  return bundle
+}
+
+export async function sendFeedback(payload: FeedbackRequest): Promise<FeedbackResponse> {
+  await delay(200)
+  return apiRequest<FeedbackResponse>('/api/agent/feedback', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+// -------------------------------
+// Existing explain helper (optional)
+// Your backend already returns explanation on /recommend
+// Keep this for compatibility with ExplainPanel expecting ExplainResult
+// -------------------------------
+export async function explainBundle(payload: { text: string }): Promise<ExplainResult> {
+  await delay(100)
+  return { text: payload.text } as ExplainResult
+}
+
+// -------------------------------
+// Shopify helpers unchanged
+// -------------------------------
 export async function shopifyCartCreate(): Promise<{ cartId: string }> {
-  await delay(600);
-  return { cartId: `cart_${Date.now()}_${Math.random().toString(36).slice(2, 8)}` };
+  await delay(600)
+  return apiRequest<{ cartId: string }>('/api/shopify/cart/create', { method: 'POST' })
 }
 
 export async function shopifyCartLinesAdd(payload: {
-  cartId: string;
-  lines: { merchandiseId: string; quantity: number }[];
+  cartId: string
+  lines: { merchandiseId: string; quantity: number }[]
 }): Promise<{ checkoutUrl: string }> {
-  await delay(800);
-  return { 
-    checkoutUrl: `https://checkout.shopify.com/demo/${payload.cartId}` 
-  };
+  await delay(800)
+  return apiRequest<{ checkoutUrl: string }>('/api/shopify/cart/lines/add', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
 }

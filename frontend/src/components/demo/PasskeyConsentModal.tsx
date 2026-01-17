@@ -88,7 +88,7 @@ export function PasskeyConsentModal({
                 </div>
                 <h3 className="font-semibold text-verified mb-1">Authorized</h3>
                 <p className="text-sm text-muted-foreground">
-                  Generating your shopping bundle...
+                  Generating recommendations...
                 </p>
               </>
             )}

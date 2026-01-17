@@ -1,0 +1,106 @@
+# ==============================
+# Repo root
+# ==============================
+
+# OS junk
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+
+# IDE/editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+
+# Secrets
+.env
+.env.*
+!.env.example
+!.env.frontend.example
+!.env.backend.example
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ==============================
+# Frontend (Vite/React) - /frontend
+# ==============================
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/.cache/
+frontend/coverage/
+frontend/*.tsbuildinfo
+
+# If you use Next.js instead of Vite at some point
+frontend/.next/
+frontend/out/
+
+# ==============================
+# Backend (Python/FastAPI) - /backend
+# ==============================
+backend/__pycache__/
+backend/**/*.py[cod]
+backend/**/__pycache__/
+
+backend/.venv/
+backend/venv/
+backend/env/
+backend/ENV/
+backend/.python-version
+
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/.coverage
+backend/coverage.xml
+backend/htmlcov/
+backend/.tox/
+backend/.cache/
+
+backend/build/
+backend/dist/
+backend/*.egg-info/
+backend/.eggs/
+
+# Local runtime artifacts
+backend/*.db
+backend/**/*.db
+backend/*.sqlite
+backend/**/*.sqlite
+backend/*.sqlite3
+backend/**/*.sqlite3
+
+# Uploads/temp if you add them
+backend/uploads/
+backend/tmp/
+backend/temp/
+
+# ==============================
+# Mongo/local data dumps (anywhere)
+# ==============================
+mongo_dump/
+data/
+*.bson
+*.archive
+
+# ==============================
+# Misc secrets and certs
+# ==============================
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.cer

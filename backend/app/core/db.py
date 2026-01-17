@@ -31,9 +31,9 @@ async def init_db() -> bool:
     global _mongo_client, _db
     settings = get_settings()
     
-    if settings.MONGODB_URI:
+    if settings.MONGO_URI:
         try:
-            _mongo_client = AsyncIOMotorClient(settings.MONGODB_URI)
+            _mongo_client = AsyncIOMotorClient(settings.MONGO_URI)
             _db = _mongo_client[settings.MONGODB_DB_NAME]
             # Test connection
             await _mongo_client.admin.command('ping')
@@ -46,7 +46,7 @@ async def init_db() -> bool:
             _db = None
             return False
     else:
-        print("📦 No MONGODB_URI set, using in-memory storage")
+        print("📦 No MONGO_URI set, using in-memory storage")
         return False
 
 

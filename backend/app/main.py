@@ -16,6 +16,14 @@ from .api.authority import router as authority_router
 from .api.audit import router as audit_router
 from .api.voice import router as voice_router
 from .api.avatar import router as avatar_router
+from .api.agent import router as agent_router
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from backboard.exceptions import BackboardAPIError
+
+
+from .api import agent as agent_module
+
 
 
 @asynccontextmanager
@@ -27,6 +35,9 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting Me-Agent Backend...")
     settings = get_settings()
     
+    print("MONGO_URI set?", bool(settings.MONGO_URI))
+    print("MONGODB_DB_NAME:", settings.MONGODB_DB_NAME)
+
     # Initialize database
     using_mongo = await init_db()
     if using_mongo:
@@ -37,7 +48,8 @@ async def lifespan(app: FastAPI):
     print(f"🔐 Demo mode: {settings.DEMO_MODE}")
     print(f"🎙️ ElevenLabs: {'configured' if settings.ELEVENLABS_API_KEY else 'not configured'}")
     print(f"🤖 Gemini: {'configured' if settings.GOOGLE_GENERATIVE_AI_API_KEY else 'not configured'}")
-    
+    await agent_module.startup()
+
     yield
     
     # Shutdown
@@ -53,14 +65,20 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
 # Configure CORS
 settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[
+    "http://localhost:8080",
+            "http://127.0.0.1:8080",
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
 )
 
 
@@ -73,8 +91,18 @@ app.include_router(authority_router, prefix="/api")
 app.include_router(audit_router, prefix="/api")
 app.include_router(voice_router, prefix="/api")
 app.include_router(avatar_router, prefix="/api")
+app.include_router(agent_module.router, prefix="/api")
 
-
+@app.exception_handler(BackboardAPIError)
+async def backboard_exception_handler(request: Request, exc: BackboardAPIError):
+    return JSONResponse(
+        status_code=502,
+        content={
+            "message": "Backboard request failed",
+            "error": str(exc),
+            "backboard_status": getattr(exc, "status_code", None),
+        },
+    )
 # ============================================================
 # Health Check
 # ============================================================
@@ -137,6 +165,13 @@ async def api_info():
             },
         }
     }
+
+
+def _parse_origins(raw: str) -> list[str]:
+    raw = (raw or "").strip()
+    if raw == "*" or raw.lower() == "all":
+        return ["*"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
 
 
 # ============================================================

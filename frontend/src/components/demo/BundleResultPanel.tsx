@@ -2,14 +2,89 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Package, Minus, Plus, Trash2, AlertTriangle, ShieldX } from 'lucide-react';
-import type { BundleResult, BundleItem } from '@/types';
+import type { BundleResult } from '@/types';
 
 interface BundleResultPanelProps {
-  bundle: BundleResult | null;
+  bundle: BundleResult | any | null;
   maxSpend: number;
   blockedItems?: string[];
   onUpdateQuantity: (itemId: string, delta: number) => void;
   onRemoveItem: (itemId: string) => void;
+}
+
+type NormalizedItem = {
+  id: string;
+  title: string;
+  merchant: string;
+  price: number;
+  qty: number;
+  tags: string[];
+};
+
+type NormalizedBundle = {
+  items: NormalizedItem[];
+  subtotal: number;
+  currency: string;
+  notes?: string;
+};
+
+function toNumber(v: unknown, fallback = 0): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function safeString(v: unknown, fallback = ''): string {
+  return typeof v === 'string' ? v : fallback;
+}
+
+function makeFallbackId(item: any, index: number): string {
+  const name = safeString(item?.name, safeString(item?.title, 'item'));
+  const brand = safeString(item?.brand, safeString(item?.merchant, ''));
+  return `${name}::${brand}::${index}`;
+}
+
+function normalizeBundle(bundle: any): NormalizedBundle {
+  const rawItems: any[] = Array.isArray(bundle?.items) ? bundle.items : [];
+
+  const items: NormalizedItem[] = rawItems.map((item, index) => {
+    const id = safeString(item?.id, makeFallbackId(item, index));
+
+    const title = safeString(item?.title, safeString(item?.name, 'Untitled item'));
+    const merchant = safeString(item?.merchant, safeString(item?.brand, ''));
+    const price = toNumber(item?.price, 0);
+
+    const qty =
+      typeof item?.qty === 'number'
+        ? item.qty
+        : typeof item?.quantity === 'number'
+          ? item.quantity
+          : 1;
+
+    const tagsArray =
+      Array.isArray(item?.reasonTags)
+        ? item.reasonTags
+        : Array.isArray(item?.tags)
+          ? item.tags
+          : [];
+
+    const tags = tagsArray
+      .map((t: any) => safeString(t, ''))
+      .filter(Boolean);
+
+    return { id, title, merchant, price, qty, tags };
+  });
+
+  const subtotal =
+    typeof bundle?.subtotal === 'number'
+      ? bundle.subtotal
+      : typeof bundle?.total === 'number'
+        ? bundle.total
+        : items.reduce((acc, it) => acc + it.price * it.qty, 0);
+
+  const currency = safeString(bundle?.currency, 'USD');
+  const notes = safeString(bundle?.notes, safeString(bundle?.notesText, safeString(bundle?.notesSummary, '')));
+
+  return { items, subtotal, currency, notes };
 }
 
 export function BundleResultPanel({
@@ -26,16 +101,17 @@ export function BundleResultPanel({
           <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
             <Package className="h-6 w-6 text-muted-foreground" />
           </div>
-          <h3 className="font-medium mb-1">No bundle generated</h3>
+          <h3 className="font-medium mb-1">No recommendations yet</h3>
           <p className="text-sm text-muted-foreground">
-            Fill out your intent and click "Generate Shopping Bundle"
+            Fill out your intent then click "Generate Shopping Bundle"
           </p>
         </CardContent>
       </Card>
     );
   }
 
-  const remaining = maxSpend - bundle.subtotal;
+  const normalized = normalizeBundle(bundle);
+  const remaining = maxSpend - normalized.subtotal;
   const isNearLimit = remaining < maxSpend * 0.1;
   const isOverLimit = remaining < 0;
 
@@ -46,14 +122,15 @@ export function BundleResultPanel({
           <Package className="h-5 w-5 text-primary" />
           Recommended Bundle
           <Badge variant="secondary" className="ml-auto">
-            {bundle.items.length} items
+            {normalized.items.length} items
           </Badge>
         </CardTitle>
       </CardHeader>
+
       <CardContent className="space-y-4">
         {/* Item List */}
         <div className="divide-y stagger-animation">
-          {bundle.items.map((item) => (
+          {normalized.items.map((item) => (
             <BundleItemRow
               key={item.id}
               item={item}
@@ -79,28 +156,44 @@ export function BundleResultPanel({
           </div>
         )}
 
+        {/* Notes (if available from /recommend) */}
+        {normalized.notes && (
+          <div className="p-3 rounded-lg bg-muted text-sm text-muted-foreground whitespace-pre-line">
+            {normalized.notes}
+          </div>
+        )}
+
         {/* Summary */}
         <div className="pt-4 border-t space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Subtotal</span>
             <span className="font-semibold">
-              ${bundle.subtotal.toFixed(2)} {bundle.currency}
+              ${normalized.subtotal.toFixed(2)} {normalized.currency}
             </span>
           </div>
+
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Budget remaining</span>
-            <span className={isOverLimit ? 'text-destructive font-semibold' : isNearLimit ? 'text-warning font-semibold' : ''}>
+            <span
+              className={
+                isOverLimit
+                  ? 'text-destructive font-semibold'
+                  : isNearLimit
+                    ? 'text-warning font-semibold'
+                    : ''
+              }
+            >
               ${remaining.toFixed(2)}
             </span>
           </div>
-          
+
           {isOverLimit && (
             <div className="flex items-center gap-2 p-2 rounded bg-destructive/10 text-destructive text-sm">
               <AlertTriangle className="h-4 w-4 shrink-0" />
               <span>Bundle exceeds budget. Remove items or increase limit.</span>
             </div>
           )}
-          
+
           {isNearLimit && !isOverLimit && (
             <div className="flex items-center gap-2 p-2 rounded bg-warning/10 text-warning text-sm">
               <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -119,7 +212,7 @@ function BundleItemRow({
   onUpdateQuantity,
   onRemove,
 }: {
-  item: BundleItem;
+  item: NormalizedItem;
   isBlocked?: boolean;
   onUpdateQuantity: (delta: number) => void;
   onRemove: () => void;
@@ -140,7 +233,7 @@ function BundleItemRow({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h4 className="text-sm font-medium truncate">{item.title}</h4>
                 {isBlocked && (
@@ -149,24 +242,29 @@ function BundleItemRow({
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">{item.merchant}</p>
+              {item.merchant && (
+                <p className="text-xs text-muted-foreground truncate">{item.merchant}</p>
+              )}
             </div>
+
             <span className="text-sm font-semibold shrink-0">
               ${(item.price * item.qty).toFixed(2)}
             </span>
           </div>
 
-          {/* Reason Tags */}
-          <div className="flex flex-wrap gap-1 mt-2">
-            {item.reasonTags.map((tag, i) => (
-              <span
-                key={i}
-                className="text-[10px] px-1.5 py-0.5 bg-verified/10 text-verified rounded"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
+          {/* Tags */}
+          {item.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {item.tags.map((tag, i) => (
+                <span
+                  key={`${tag}-${i}`}
+                  className="text-[10px] px-1.5 py-0.5 bg-verified/10 text-verified rounded"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Quantity Controls */}
           <div className="flex items-center justify-between mt-3">
@@ -180,7 +278,9 @@ function BundleItemRow({
               >
                 <Minus className="h-3 w-3" />
               </Button>
+
               <span className="w-8 text-center text-sm font-medium">{item.qty}</span>
+
               <Button
                 variant="outline"
                 size="icon"
@@ -190,6 +290,7 @@ function BundleItemRow({
                 <Plus className="h-3 w-3" />
               </Button>
             </div>
+
             <Button
               variant="ghost"
               size="icon"
