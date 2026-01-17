@@ -3,7 +3,7 @@
  * Shows bitmoji + plays voice explanation with user's cloned voice
  */
 import { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Loader2, Mic, User } from 'lucide-react';
+import { Play, Loader2, Mic, User, Square } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -44,17 +44,22 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
   }, []);
 
   const handlePlayExplanation = async () => {
-    if (!explanation) return;
+    const testMessage = "Voice cloning successful! This is how I'll explain your shopping decisions.";
+    console.log('Play button clicked, playing test message');
     
     if (isPlaying && audioRef.current) {
+      console.log('Stopping playback');
       audioRef.current.pause();
+      audioRef.current.currentTime = 0;
       setIsPlaying(false);
       return;
     }
     
+    console.log('Starting playback, synthesizing test message...');
     setIsLoadingVoice(true);
     try {
-      const response = await synthesizeVoice(explanation);
+      const response = await synthesizeVoice(testMessage);
+      console.log('Synthesize response:', response);
       
       if (response.success && response.audioBase64) {
         const audioSrc = `data:${response.contentType};base64,${response.audioBase64}`;
@@ -63,12 +68,18 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
           audioRef.current.src = audioSrc;
           await audioRef.current.play();
           setIsPlaying(true);
+          console.log('Playback started');
           
-          audioRef.current.onended = () => setIsPlaying(false);
+          audioRef.current.onended = () => {
+            console.log('Playback ended');
+            setIsPlaying(false);
+          };
         }
+      } else {
+        console.error('Synthesis failed:', response.error);
       }
     } catch (e) {
-      console.error('Voice synthesis failed:', e);
+      console.error('Voice synthesis error:', e);
     } finally {
       setIsLoadingVoice(false);
     }
@@ -218,51 +229,68 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
           )}
 
           {/* Voice Controls */}
-          <div className="flex gap-2">
-            {!showSetup ? (
+          <div className="flex gap-2 w-full">
+            {!showSetup && !isRecording ? (
               <>
+                {/* Default: Play and Mic buttons, equal width */}
                 <Button
                   onClick={handlePlayExplanation}
-                  disabled={!explanation || isLoadingVoice || isUploading}
+                  disabled={isLoadingVoice || isUploading}
                   size="sm"
                   className="flex-1"
                 >
                   {isLoadingVoice ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-1" />
                   ) : isPlaying ? (
-                    <Pause className="h-4 w-4 mr-1" />
+                    <Square className="h-4 w-4 mr-1" />
                   ) : (
                     <Play className="h-4 w-4 mr-1" />
                   )}
-                  {isPlaying ? 'Pause' : 'Play'}
+                  {isPlaying ? 'Stop' : 'Play'}
                 </Button>
                 <Button
                   onClick={() => setShowSetup(true)}
                   variant="outline"
                   size="sm"
+                  className="flex-1"
                   disabled={isUploading}
                 >
-                  <Mic className="h-4 w-4" />
+                  <Mic className="h-4 w-4 mr-1" />
+                  Mic
+                </Button>
+              </>
+            ) : isRecording ? (
+              <>
+                {/* Recording: Stop button full width */}
+                <Button
+                  onClick={handleStopRecording}
+                  size="sm"
+                  className="flex-1 bg-destructive hover:bg-destructive/90"
+                >
+                  <Mic className="h-4 w-4 mr-1 animate-pulse" />
+                  Stop
                 </Button>
               </>
             ) : (
               <>
+                {/* Setup mode (not recording): Record and Cancel, equal width */}
                 <Button
-                  onClick={isRecording ? handleStopRecording : handleStartRecording}
+                  onClick={handleStartRecording}
                   size="sm"
+                  className="flex-1"
                   disabled={isUploading}
-                  className={isRecording ? 'bg-destructive hover:bg-destructive/90' : ''}
                 >
-                  <Mic className={cn("h-4 w-4", isRecording && "animate-pulse")} />
-                  {isRecording ? 'Stop' : 'Record'}
+                  <Mic className="h-4 w-4 mr-1" />
+                  Record
                 </Button>
                 <Button
                   onClick={() => setShowSetup(false)}
                   variant="outline"
                   size="sm"
+                  className="flex-1"
                   disabled={isUploading}
                 >
-                  Done
+                  Cancel
                 </Button>
               </>
             )}
