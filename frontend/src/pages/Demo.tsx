@@ -6,6 +6,7 @@ import { CartPanel } from '@/components/demo/CartPanel';
 import { ExplainPanel } from '@/components/demo/ExplainPanel';
 import { AuditPreviewPanel } from '@/components/demo/AuditPreviewPanel';
 import { PasskeyConsentModal } from '@/components/demo/PasskeyConsentModal';
+import { VoiceExplainer } from '@/components/VoiceExplainer';
 import { useAuditLog } from '@/hooks/useAuditLog';
 import { loadLastIntent, saveLastIntent, loadPermissionPolicy } from '@/lib/storage';
 import { authorizePasskey, generateBundle, explainBundle, shopifyCartCreate, shopifyCartLinesAdd } from '@/lib/api';
@@ -44,6 +45,10 @@ export default function DemoPage() {
   // Authority layer state
   const [blockedItems, setBlockedItems] = useState<string[]>([]);
   const [policy, setPolicy] = useState<AgentPolicy | null>(null);
+  
+  // Voice explainer state
+  const [showVoiceExplainer, setShowVoiceExplainer] = useState(true);
+  const [voiceExplanation, setVoiceExplanation] = useState<string>('');
 
   // Sync intent form to localStorage
   useEffect(() => {
@@ -105,6 +110,7 @@ export default function DemoPage() {
             maxSpend: intentForm.maxSpend,
             allowedCategories: intentForm.allowedCategories,
           });
+          setVoiceExplanation(authorityCheck.reason);
           toast({
             title: 'Action blocked by policy',
             description: authorityCheck.reason,
@@ -439,6 +445,14 @@ export default function DemoPage() {
         onCancel={handlePasskeyCancel}
         onRetry={handlePasskeyRetry}
       />
+
+      {/* Voice Explainer - Top right */}
+      {showVoiceExplainer && (
+        <VoiceExplainer 
+          explanation={voiceExplanation || explanation?.reasoning}
+          onClose={() => setShowVoiceExplainer(false)}
+        />
+      )}
     </DashboardLayout>
   );
 }

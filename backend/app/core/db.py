@@ -20,6 +20,7 @@ _memory_store: Dict[str, Dict[str, List[Any]]] = {
     "policies": {},    # userId -> policy
     "audit_logs": {},  # userId -> list of events
     "avatars": {},     # userId -> avatar data
+    "voices": {},      # userId -> cloned voice ID
 }
 
 
@@ -262,3 +263,39 @@ async def get_avatar(user_id: str) -> Optional[dict]:
         return avatar
     else:
         return _memory_store["avatars"].get(user_id)
+
+
+# ============================================================
+# Voice Storage
+# ============================================================
+
+async def save_cloned_voice_id(voice_id: str, user_id: str = "default"):
+    """Save cloned voice ID for user."""
+    data = {
+        "userId": user_id,
+        "voiceId": voice_id,
+        "createdAt": datetime.utcnow().isoformat(),
+    }
+    
+    if _db is not None:
+        await _db.voices.update_one(
+            {"userId": user_id},
+            {"$set": data},
+            upsert=True
+        )
+    else:
+        _memory_store["voices"][user_id] = data
+    
+    return data
+
+
+async def get_cloned_voice_id(user_id: str = "default") -> Optional[str]:
+    """Get cloned voice ID for user, or None if not set."""
+    if _db is not None:
+        voice = await _db.voices.find_one({"userId": user_id})
+        if voice:
+            return voice.get("voiceId")
+        return None
+    else:
+        voice = _memory_store["voices"].get(user_id)
+        return voice.get("voiceId") if voice else None

@@ -207,6 +207,44 @@ export async function synthesizeVoice(
   });
 }
 
+export async function cloneVoice(audioFile: File): Promise<{ success: boolean; voiceId?: string; error?: string }> {
+  const formData = new FormData();
+  formData.append('file', audioFile);
+  
+  const response = await fetch(`${API_BASE}/voice/clone`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Clone failed' }));
+    throw new Error(error.detail || `Clone error: ${response.status}`);
+  }
+  
+  return response.json();
+}
+
+export async function useVoiceId(voiceId: string): Promise<{ success: boolean; voiceId?: string; error?: string }> {
+  const response = await fetch(`${API_BASE}/voice/use`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ voiceId }),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to use voice' }));
+    throw new Error(error.detail || `Error: ${response.status}`);
+  }
+  
+  return response.json();
+}
+
+export async function getCloneStatus(): Promise<{ hasClonedVoice: boolean; voiceId?: string }> {
+  return apiFetch('/voice/clone/status');
+}
+
 export async function getAvailableVoices(): Promise<{
   available: boolean;
   voices: Array<{ id: string; name: string; category: string }>;
