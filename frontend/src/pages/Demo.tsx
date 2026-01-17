@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { IntentFormPanel } from '@/components/demo/IntentFormPanel';
 import { BundleResultPanel } from '@/components/demo/BundleResultPanel';
@@ -17,27 +18,22 @@ import {
   loadLastExplanation,
   saveLastExplanation,
 } from '@/lib/storage';
-import { authorizePasskey, generateBundle, explainBundle, shopifyCartCreate, shopifyCartLinesAdd } from '@/lib/api';
+import { authorizePasskey, generateBundle, explainBundle } from '@/lib/api';
 import type { 
   IntentForm, 
   BundleResult, 
-  CartState, 
   ExplainResult, 
   PasskeyState 
 } from '@/types';
 import { DEFAULT_INTENT_FORM } from '@/types';
 import { toast } from '@/hooks/use-toast';
+import { addCartItem, loadCartItems } from '@/lib/storage';
 
 export default function DemoPage() {
   // Load persisted data on mount
   const [intentForm, setIntentForm] = useState<IntentForm>(() => loadLastIntent());
   const [bundle, setBundle] = useState<BundleResult | null>(() => loadLastBundle());
-  const [cart, setCart] = useState<CartState>({
-    cartId: null,
-    checkoutUrl: null,
-    isCreating: false,
-    isAddingLines: false,
-  });
+  const [cartCount, setCartCount] = useState(() => loadCartItems().length);
   const [explanation, setExplanation] = useState<ExplainResult | null>(() => loadLastExplanation());
   const [isExplaining, setIsExplaining] = useState(false);
 
@@ -45,6 +41,7 @@ export default function DemoPage() {
   const [showPasskeyModal, setShowPasskeyModal] = useState(false);
   const [passkeyState, setPasskeyState] = useState<PasskeyState>('idle');
   const [isGenerating, setIsGenerating] = useState(false);
+  const navigate = useNavigate();
 
   // Audit log
   const { events, addEvent, getRecentEvents } = useAuditLog();
@@ -108,7 +105,7 @@ export default function DemoPage() {
           const bundleResult = await generateBundle(intentForm);
           setBundle(bundleResult);
           setExplanation(null);
-          setCart({ cartId: null, checkoutUrl: null, isCreating: false, isAddingLines: false });
+          setCartCount(loadCartItems().length);
           
           addEvent('BUNDLE_GENERATED', `Generated ${bundleResult.items.length} items totaling $${bundleResult.subtotal.toFixed(2)}`, {
             maxSpend: intentForm.maxSpend,
@@ -151,7 +148,7 @@ export default function DemoPage() {
     setIntentForm(DEFAULT_INTENT_FORM);
     setBundle(null);
     setExplanation(null);
-    setCart({ cartId: null, checkoutUrl: null, isCreating: false, isAddingLines: false });
+    setCartCount(loadCartItems().length);
   }, []);
 
   const handleUpdateQuantity = useCallback((itemId: string, delta: number) => {
@@ -180,70 +177,30 @@ export default function DemoPage() {
     });
   }, [bundle]);
 
-  const handleCreateCart = useCallback(async () => {
-    setCart(prev => ({ ...prev, isCreating: true }));
-    
-    try {
-      const result = await shopifyCartCreate();
-      setCart(prev => ({ ...prev, cartId: result.cartId, isCreating: false }));
-      
-      addEvent('CART_CREATED', 'Shopify cart created', {}, { cartId: result.cartId });
-      
-      toast({
-        title: 'Cart created',
-        description: 'Ready to add items',
+  const handleAddBundleToCart = useCallback(() => {
+    if (!bundle) return;
+    bundle.items.forEach(item => {
+      addCartItem({
+        id: item.id,
+        title: item.title,
+        price: item.price,
+        qty: item.qty,
+        imageUrl: item.imageUrl,
       });
-    } catch (error) {
-      setCart(prev => ({ ...prev, isCreating: false }));
-      toast({
-        title: 'Failed to create cart',
-        description: 'Please try again',
-        variant: 'destructive',
-      });
-    }
-  }, [addEvent]);
+    });
+    const updatedCount = loadCartItems().length;
+    setCartCount(updatedCount);
 
-  const handleAddLines = useCallback(async () => {
-    if (!cart.cartId || !bundle) return;
-    
-    setCart(prev => ({ ...prev, isAddingLines: true }));
-    
-    try {
-      const lines = bundle.items.map(item => ({
-        merchandiseId: item.id,
-        quantity: item.qty,
-      }));
-      
-      const result = await shopifyCartLinesAdd({ cartId: cart.cartId, lines });
-      setCart(prev => ({ 
-        ...prev, 
-        checkoutUrl: result.checkoutUrl, 
-        isAddingLines: false 
-      }));
-      
-      addEvent('CART_LINES_ADDED', `Added ${lines.length} items to cart`, {}, { lineCount: lines.length });
-      addEvent('CHECKOUT_LINK_READY', 'Checkout URL generated - user must click to proceed', {}, { checkoutUrl: result.checkoutUrl });
-      
-      toast({
-        title: 'Items added to cart',
-        description: 'Checkout is now available',
-      });
-    } catch (error) {
-      setCart(prev => ({ ...prev, isAddingLines: false }));
-      toast({
-        title: 'Failed to add items',
-        description: 'Please try again',
-        variant: 'destructive',
-      });
-    }
-  }, [cart.cartId, bundle, addEvent]);
+    addEvent('CART_LINES_ADDED', `Added ${bundle.items.length} items to checkout`, {}, { lineCount: bundle.items.length });
+    toast({
+      title: 'Items added to checkout',
+      description: 'Review them in the Checkout tab',
+    });
+  }, [bundle, addEvent]);
 
   const handleOpenCheckout = useCallback(() => {
-    if (cart.checkoutUrl) {
-      // In a real app, this would open the Shopify checkout
-      window.open(cart.checkoutUrl, '_blank', 'noopener,noreferrer');
-    }
-  }, [cart.checkoutUrl]);
+    navigate('/checkout');
+  }, [navigate]);
 
   const handleExplain = useCallback(async () => {
     if (!bundle) return;
@@ -293,10 +250,9 @@ export default function DemoPage() {
           />
           
           <CartPanel
-            cart={cart}
             bundle={bundle}
-            onCreateCart={handleCreateCart}
-            onAddLines={handleAddLines}
+            cartCount={cartCount}
+            onAddBundle={handleAddBundleToCart}
             onOpenCheckout={handleOpenCheckout}
           />
           

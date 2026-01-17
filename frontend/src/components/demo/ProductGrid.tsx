@@ -2,15 +2,16 @@ import { Product } from "../../types/index.ts";
 
 interface ProductGridProps {
   products: Product[];
+  onAddToCart?: (product: Product) => void;
 }
 
-export function ProductGrid({ products }: ProductGridProps) {
+export function ProductGrid({ products, onAddToCart }: ProductGridProps) {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-semibold text-gray-900">Our Products</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {products.map((product) => (
-          <ProductCard key={product.id} product={product} />
+          <ProductCard key={product.id} product={product} onAddToCart={onAddToCart} />
         ))}
       </div>
     </div>
@@ -19,9 +20,10 @@ export function ProductGrid({ products }: ProductGridProps) {
 
 interface ProductCardProps {
   product: Product;
+  onAddToCart?: (product: Product) => void;
 }
 
-function ProductCard({ product }: ProductCardProps) {
+function ProductCard({ product, onAddToCart }: ProductCardProps) {
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
       <div className="aspect-w-16 aspect-h-9">
@@ -67,6 +69,7 @@ function ProductCard({ product }: ProductCardProps) {
                 : "bg-gray-300 text-gray-500 cursor-not-allowed"
             }`}
             disabled={!product.inStock}
+            onClick={() => onAddToCart?.(product)}
           >
             Add to Cart
           </button>

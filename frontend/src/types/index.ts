@@ -11,6 +11,18 @@ export interface Product {
   inStock: boolean;
 }
 
+export interface CartItem {
+  id: string;
+  title: string;
+  price: number;
+  qty: number;
+  imageUrl?: string;
+  tags?: string[];
+  productType?: string;
+  vendor?: string;
+  inStock?: boolean;
+}
+
 export interface PermissionPolicy {
   maxSpend: number;
   allowedCategories: string[];

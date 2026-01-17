@@ -4,6 +4,7 @@ import { ProductGrid } from "../components/demo/ProductGrid";
 import { toast } from "sonner";
 import { DashboardLayout } from '@/components/layout/DashboardLayout';  
 import type { Product } from "../types";
+import { addCartItem } from "../lib/storage";
 
 type ShopifyProduct = {
   id: string;
@@ -54,7 +55,22 @@ export default function WebStore() {
         }
     }, [isError, error]);
 
-	return (
+    const handleAddToCart = (product: Product) => {
+        addCartItem({
+            id: product.id,
+            title: product.title,
+            price: product.price,
+            qty: 1,
+            imageUrl: product.imageUrl,
+            tags: product.tags,
+            productType: product.productType,
+            vendor: product.vendor,
+            inStock: product.inStock,
+        });
+        toast.success("Added to checkout", { description: product.title });
+    };
+
+    return (
         <DashboardLayout> 
             <div className="max-w-7xl mx-auto p-6">
                 <div className="mb-8">
@@ -66,7 +82,7 @@ export default function WebStore() {
                 {isLoading ? (
                     <p className="text-gray-600">Loading products...</p>
                 ) : (
-                    <ProductGrid products={products ?? []} />
+                    <ProductGrid products={products ?? []} onAddToCart={handleAddToCart} />
                 )}
             </div>
         </DashboardLayout> 

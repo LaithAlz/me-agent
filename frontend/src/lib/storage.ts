@@ -1,5 +1,5 @@
 // Local storage utilities for Me-Agent
-import type { PermissionPolicy, IntentForm, AuditEvent, BundleResult, ExplainResult } from '@/types';
+import type { PermissionPolicy, IntentForm, AuditEvent, BundleResult, ExplainResult, CartItem } from '@/types';
 import { DEFAULT_PERMISSION_POLICY, DEFAULT_INTENT_FORM } from '@/types';
 
 const STORAGE_KEYS = {
@@ -7,6 +7,8 @@ const STORAGE_KEYS = {
   LAST_INTENT: 'meagent_last_intent',
   LAST_BUNDLE: 'meagent_last_bundle',
   LAST_EXPLANATION: 'meagent_last_explanation',
+  CART_ITEMS: 'meagent_cart_items',
+  CHECKOUT_URL: 'meagent_checkout_url',
   AUDIT_LOG: 'meagent_audit_log',
 } as const;
 
@@ -94,6 +96,85 @@ export function loadLastExplanation(): ExplainResult | null {
     }
   } catch (e) {
     console.warn('Failed to load last explanation:', e);
+  }
+  return null;
+}
+
+export function loadCartItems(): CartItem[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.CART_ITEMS);
+    if (stored) {
+      return JSON.parse(stored) as CartItem[];
+    }
+  } catch (e) {
+    console.warn('Failed to load cart items:', e);
+  }
+  return [];
+}
+
+export function saveCartItems(items: CartItem[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CART_ITEMS, JSON.stringify(items));
+  } catch (e) {
+    console.warn('Failed to save cart items:', e);
+  }
+}
+
+export function addCartItem(item: CartItem): CartItem[] {
+  const existing = loadCartItems();
+  const found = existing.find(existingItem => existingItem.id === item.id);
+  const updated = found
+    ? existing.map(existingItem =>
+        existingItem.id === item.id
+          ? { ...existingItem, qty: existingItem.qty + item.qty }
+          : existingItem
+      )
+    : [...existing, item];
+  saveCartItems(updated);
+  return updated;
+}
+
+export function updateCartItemQty(itemId: string, qty: number): CartItem[] {
+  const existing = loadCartItems();
+  const updated = existing
+    .map(item => (item.id === itemId ? { ...item, qty: Math.max(1, qty) } : item))
+    .filter(item => item.qty > 0);
+  saveCartItems(updated);
+  return updated;
+}
+
+export function removeCartItem(itemId: string): CartItem[] {
+  const existing = loadCartItems();
+  const updated = existing.filter(item => item.id !== itemId);
+  saveCartItems(updated);
+  return updated;
+}
+
+export function clearCartItems(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.CART_ITEMS);
+  } catch (e) {
+    console.warn('Failed to clear cart items:', e);
+  }
+}
+
+export function saveCheckoutUrl(url: string | null): void {
+  try {
+    if (!url) {
+      localStorage.removeItem(STORAGE_KEYS.CHECKOUT_URL);
+      return;
+    }
+    localStorage.setItem(STORAGE_KEYS.CHECKOUT_URL, url);
+  } catch (e) {
+    console.warn('Failed to save checkout url:', e);
+  }
+}
+
+export function loadCheckoutUrl(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.CHECKOUT_URL);
+  } catch (e) {
+    console.warn('Failed to load checkout url:', e);
   }
   return null;
 }

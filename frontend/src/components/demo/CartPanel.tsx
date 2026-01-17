@@ -1,26 +1,23 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, ExternalLink, Shield, Loader2 } from 'lucide-react';
-import type { CartState, BundleResult } from '@/types';
+import { ShoppingCart, ExternalLink, Shield } from 'lucide-react';
+import type { BundleResult } from '@/types';
 
 interface CartPanelProps {
-  cart: CartState;
   bundle: BundleResult | null;
-  onCreateCart: () => void;
-  onAddLines: () => void;
+  cartCount: number;
+  onAddBundle: () => void;
   onOpenCheckout: () => void;
 }
 
 export function CartPanel({
-  cart,
   bundle,
-  onCreateCart,
-  onAddLines,
+  cartCount,
+  onAddBundle,
   onOpenCheckout,
 }: CartPanelProps) {
   const hasBundle = bundle && bundle.items.length > 0;
-  const hasCart = !!cart.cartId;
-  const hasCheckout = !!cart.checkoutUrl;
+  const hasCart = cartCount > 0;
 
   return (
     <Card>
@@ -39,14 +36,9 @@ export function CartPanel({
             active={!!hasBundle}
           />
           <StatusRow 
-            label="Cart created" 
+            label="Items in checkout" 
             completed={hasCart} 
             active={hasCart}
-          />
-          <StatusRow 
-            label="Checkout ready" 
-            completed={hasCheckout} 
-            active={hasCheckout}
           />
         </div>
 
@@ -55,38 +47,20 @@ export function CartPanel({
           <Button
             variant="secondary"
             className="w-full justify-start"
-            disabled={!hasBundle || hasCart || cart.isCreating}
-            onClick={onCreateCart}
+            disabled={!hasBundle}
+            onClick={onAddBundle}
           >
-            {cart.isCreating ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <ShoppingCart className="h-4 w-4 mr-2" />
-            )}
-            Create Shopify Cart
-          </Button>
-
-          <Button
-            variant="secondary"
-            className="w-full justify-start"
-            disabled={!hasCart || hasCheckout || cart.isAddingLines}
-            onClick={onAddLines}
-          >
-            {cart.isAddingLines ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <ShoppingCart className="h-4 w-4 mr-2" />
-            )}
-            Add Lines to Cart
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            Add bundle to checkout
           </Button>
 
           <Button
             className="w-full justify-start"
-            disabled={!hasCheckout}
+            disabled={!hasCart}
             onClick={onOpenCheckout}
           >
             <ExternalLink className="h-4 w-4 mr-2" />
-            Open Checkout
+            Go to Checkout
           </Button>
         </div>
 
