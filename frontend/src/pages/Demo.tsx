@@ -7,7 +7,16 @@ import { ExplainPanel } from '@/components/demo/ExplainPanel';
 import { AuditPreviewPanel } from '@/components/demo/AuditPreviewPanel';
 import { PasskeyConsentModal } from '@/components/demo/PasskeyConsentModal';
 import { useAuditLog } from '@/hooks/useAuditLog';
-import { loadLastIntent, saveLastIntent, loadPermissionPolicy } from '@/lib/storage';
+import {
+  loadLastIntent,
+  saveLastIntent,
+  loadPermissionPolicy,
+  savePermissionPolicy,
+  loadLastBundle,
+  saveLastBundle,
+  loadLastExplanation,
+  saveLastExplanation,
+} from '@/lib/storage';
 import { authorizePasskey, generateBundle, explainBundle, shopifyCartCreate, shopifyCartLinesAdd } from '@/lib/api';
 import type { 
   IntentForm, 
@@ -22,14 +31,14 @@ import { toast } from '@/hooks/use-toast';
 export default function DemoPage() {
   // Load persisted data on mount
   const [intentForm, setIntentForm] = useState<IntentForm>(() => loadLastIntent());
-  const [bundle, setBundle] = useState<BundleResult | null>(null);
+  const [bundle, setBundle] = useState<BundleResult | null>(() => loadLastBundle());
   const [cart, setCart] = useState<CartState>({
     cartId: null,
     checkoutUrl: null,
     isCreating: false,
     isAddingLines: false,
   });
-  const [explanation, setExplanation] = useState<ExplainResult | null>(null);
+  const [explanation, setExplanation] = useState<ExplainResult | null>(() => loadLastExplanation());
   const [isExplaining, setIsExplaining] = useState(false);
 
   // Passkey modal state
@@ -43,7 +52,22 @@ export default function DemoPage() {
   // Sync intent form to localStorage
   useEffect(() => {
     saveLastIntent(intentForm);
+    const currentPolicy = loadPermissionPolicy();
+    savePermissionPolicy({
+      ...currentPolicy,
+      maxSpend: intentForm.maxSpend,
+      allowedCategories: intentForm.allowedCategories,
+      agentEnabled: intentForm.agentEnabled,
+    });
   }, [intentForm]);
+
+  useEffect(() => {
+    saveLastBundle(bundle);
+  }, [bundle]);
+
+  useEffect(() => {
+    saveLastExplanation(explanation);
+  }, [explanation]);
 
   // Sync with permission policy from settings
   useEffect(() => {

@@ -1,10 +1,12 @@
 // Local storage utilities for Me-Agent
-import type { PermissionPolicy, IntentForm, AuditEvent } from '@/types';
+import type { PermissionPolicy, IntentForm, AuditEvent, BundleResult, ExplainResult } from '@/types';
 import { DEFAULT_PERMISSION_POLICY, DEFAULT_INTENT_FORM } from '@/types';
 
 const STORAGE_KEYS = {
   PERMISSION_POLICY: 'meagent_permission_policy',
   LAST_INTENT: 'meagent_last_intent',
+  LAST_BUNDLE: 'meagent_last_bundle',
+  LAST_EXPLANATION: 'meagent_last_explanation',
   AUDIT_LOG: 'meagent_audit_log',
 } as const;
 
@@ -46,6 +48,54 @@ export function loadLastIntent(): IntentForm {
     console.warn('Failed to load last intent:', e);
   }
   return DEFAULT_INTENT_FORM;
+}
+
+export function saveLastBundle(bundle: BundleResult | null): void {
+  try {
+    if (!bundle) {
+      localStorage.removeItem(STORAGE_KEYS.LAST_BUNDLE);
+      return;
+    }
+    localStorage.setItem(STORAGE_KEYS.LAST_BUNDLE, JSON.stringify(bundle));
+  } catch (e) {
+    console.warn('Failed to save last bundle:', e);
+  }
+}
+
+export function loadLastBundle(): BundleResult | null {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.LAST_BUNDLE);
+    if (stored) {
+      return JSON.parse(stored) as BundleResult;
+    }
+  } catch (e) {
+    console.warn('Failed to load last bundle:', e);
+  }
+  return null;
+}
+
+export function saveLastExplanation(explanation: ExplainResult | null): void {
+  try {
+    if (!explanation) {
+      localStorage.removeItem(STORAGE_KEYS.LAST_EXPLANATION);
+      return;
+    }
+    localStorage.setItem(STORAGE_KEYS.LAST_EXPLANATION, JSON.stringify(explanation));
+  } catch (e) {
+    console.warn('Failed to save last explanation:', e);
+  }
+}
+
+export function loadLastExplanation(): ExplainResult | null {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.LAST_EXPLANATION);
+    if (stored) {
+      return JSON.parse(stored) as ExplainResult;
+    }
+  } catch (e) {
+    console.warn('Failed to load last explanation:', e);
+  }
+  return null;
 }
 
 export function saveAuditLog(events: AuditEvent[]): void {
