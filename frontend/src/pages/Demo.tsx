@@ -6,6 +6,8 @@ import { CartPanel } from '@/components/demo/CartPanel'
 import { ExplainPanel } from '@/components/demo/ExplainPanel'
 import { AuditPreviewPanel } from '@/components/demo/AuditPreviewPanel'
 import { PasskeyConsentModal } from '@/components/demo/PasskeyConsentModal'
+import { VoiceExplainer } from '@/components/VoiceExplainer'
+
 import { useAuditLog } from '@/hooks/useAuditLog'
 import { loadLastIntent, saveLastIntent, loadPermissionPolicy } from '@/lib/storage'
 import {
@@ -16,6 +18,9 @@ import {
   shopifyCartLinesAdd,
   type Product,
 } from '@/lib/api'
+
+import { checkAuthority, getPolicy, type AgentPolicy } from '@/lib/backendApi'
+
 import type {
   IntentForm,
   BundleResult,
@@ -30,7 +35,6 @@ const USER_ID = 'laith_test_001'
 
 // -----------------------
 // Demo Inventory (MVP)
-// Replace later with Shopify inventory fetch or Backboard inventory ingestion
 // -----------------------
 const DEMO_PRODUCTS: Product[] = [
   { name: 'Apple Magic Trackpad', price: 169, brand: 'Apple', tags: ['office', 'minimal', 'ecosystem', 'ergonomic'] },
@@ -86,6 +90,8 @@ const DEMO_PRODUCTS: Product[] = [
 ]
 
 export default function DemoPage() {
+  const [policy, setPolicy] = useState<AgentPolicy | null>(null)
+
   const [intentForm, setIntentForm] = useState<IntentForm>(() => loadLastIntent())
   const [bundle, setBundle] = useState<BundleResult | null>(null)
 
@@ -96,7 +102,6 @@ export default function DemoPage() {
     isAddingLines: false,
   })
 
-  // Keep the backend explanation text separately so ExplainPanel remains “on click”
   const [rawExplanation, setRawExplanation] = useState<string | null>(null)
   const [explanation, setExplanation] = useState<ExplainResult | null>(null)
   const [isExplaining, setIsExplaining] = useState(false)
@@ -105,6 +110,9 @@ export default function DemoPage() {
   const [passkeyState, setPasskeyState] = useState<PasskeyState>('idle')
   const [isGenerating, setIsGenerating] = useState(false)
 
+  const [showVoiceExplainer, setShowVoiceExplainer] = useState(false)
+  const [voiceExplanation, setVoiceExplanation] = useState<string | null>(null)
+
   const { addEvent, getRecentEvents } = useAuditLog()
 
   useEffect(() => {
@@ -112,13 +120,28 @@ export default function DemoPage() {
   }, [intentForm])
 
   useEffect(() => {
-    const policy = loadPermissionPolicy()
-    setIntentForm(prev => ({
-      ...prev,
-      maxSpend: policy.maxSpend,
-      allowedCategories: policy.allowedCategories,
-      agentEnabled: policy.agentEnabled,
-    }))
+    const loadPolicyFromBackend = async () => {
+      try {
+        const data = await getPolicy()
+        setPolicy(data.policy)
+        setIntentForm(prev => ({
+          ...prev,
+          maxSpend: data.policy.maxSpend,
+          allowedCategories: data.policy.allowedCategories,
+          agentEnabled: data.policy.agentEnabled,
+        }))
+      } catch {
+        const localPolicy = loadPermissionPolicy()
+        setIntentForm(prev => ({
+          ...prev,
+          maxSpend: localPolicy.maxSpend,
+          allowedCategories: localPolicy.allowedCategories,
+          agentEnabled: localPolicy.agentEnabled,
+        }))
+      }
+    }
+
+    loadPolicyFromBackend()
   }, [])
 
   const handleGenerate = useCallback(() => {
@@ -139,6 +162,35 @@ export default function DemoPage() {
 
     setPasskeyState('success')
 
+    // Optional authority check
+    try {
+      const authorityCheck = await checkAuthority({
+        action: 'recommendBundle',
+        cartTotal: 0,
+        categories: (intentForm as any).allowedCategories ?? [],
+        meta: { maxSpend: (intentForm as any).maxSpend, intent: (intentForm as any).shoppingIntent },
+      })
+
+      if (authorityCheck.decision === 'BLOCK') {
+        setPasskeyState('failed')
+        addEvent('AUTHORITY_BLOCKED', authorityCheck.reason, {
+          maxSpend: (intentForm as any).maxSpend,
+          allowedCategories: (intentForm as any).allowedCategories,
+        })
+        setVoiceExplanation(authorityCheck.reason)
+        setShowVoiceExplainer(true)
+        toast({
+          title: 'Action blocked by policy',
+          description: authorityCheck.reason,
+          variant: 'destructive',
+        })
+        setTimeout(() => setShowPasskeyModal(false), 1500)
+        return
+      }
+    } catch {
+      // If authority service is down, proceed with local validation
+    }
+
     addEvent('CONSENT_GRANTED', 'User authorized recommendation generation via passkey', {
       maxSpend: (intentForm as any).maxSpend,
       allowedCategories: (intentForm as any).allowedCategories,
@@ -158,25 +210,30 @@ export default function DemoPage() {
 
         setBundle(bundleResult)
         setRawExplanation(explainText)
-        setExplanation(null) // keep explain gated behind button
+        setExplanation(null)
         setCart({ cartId: null, checkoutUrl: null, isCreating: false, isAddingLines: false })
+
+        const items = Array.isArray((bundleResult as any).items) ? (bundleResult as any).items : []
+        const subtotal =
+          typeof (bundleResult as any).subtotal === 'number'
+            ? (bundleResult as any).subtotal
+            : typeof (bundleResult as any).total === 'number'
+              ? (bundleResult as any).total
+              : 0
 
         addEvent(
           'BUNDLE_GENERATED',
-          `Generated ${bundleResult.items.length} items totaling $${bundleResult.subtotal.toFixed(2)}`,
+          `Generated ${items.length} items totaling $${Number(subtotal).toFixed(2)}`,
           {
             maxSpend: (intentForm as any).maxSpend,
             allowedCategories: (intentForm as any).allowedCategories,
           },
-          {
-            itemCount: bundleResult.items.length,
-            subtotal: bundleResult.subtotal,
-          }
+          { itemCount: items.length, subtotal }
         )
 
         toast({
-          title: 'Bundle generated',
-          description: `${bundleResult.items.length} items recommended within your $${(intentForm as any).maxSpend} budget`,
+          title: 'Recommendations generated',
+          description: `${items.length} items recommended within your $${(intentForm as any).maxSpend} budget`,
         })
       } catch (error) {
         toast({
@@ -235,38 +292,37 @@ export default function DemoPage() {
   const handleRemoveItem = useCallback(async (itemId: string) => {
     if (!bundle) return
 
-    const removed = bundle.items.find(i => i.id === itemId)
+    const itemsAny: any[] = Array.isArray((bundle as any).items) ? ((bundle as any).items as any[]) : []
+    const removed = itemsAny.find(i => i.id === itemId)
     if (!removed) return
 
-    // 1) Update UI immediately
+    // Update UI immediately
     setBundle(prev => {
       if (!prev) return prev
       const prevAny = prev as any
       const prevItems: any[] = Array.isArray(prevAny.items) ? prevAny.items : []
       const items = prevItems.filter(item => item.id !== itemId)
-      const subtotal = items.reduce(
-        (sum, item) => sum + Number(item.price) * Number(item.qty ?? 1),
-        0
-      )
+      const subtotal = items.reduce((sum, item) => sum + Number(item.price) * Number(item.qty ?? 1), 0)
       return { ...prevAny, items, subtotal: Math.round(subtotal * 100) / 100 } as BundleResult
     })
 
-    // 2) Persist feedback
-    // Send the item title so you do not accidentally mark the entire brand as rejected
+    // Persist feedback
+    const rejectedLabel = String(removed.name ?? removed.title ?? removed.id ?? 'unknown_item')
+
     try {
       await sendFeedback({
         user_id: USER_ID,
-        rejected_items: [removed.title],
+        rejected_items: [rejectedLabel],
         reason: 'User removed from bundle',
       })
 
-      addEvent('FEEDBACK_SUBMITTED', `User rejected item: ${removed.title}`, {}, { item: removed.title })
+      addEvent('FEEDBACK_SUBMITTED', `User rejected item: ${rejectedLabel}`, {}, { item: rejectedLabel })
 
       toast({
         title: 'Feedback saved',
-        description: `Me-Agent will avoid "${removed.title}" in future recommendations`,
+        description: `Me-Agent will avoid "${rejectedLabel}" in future recommendations`,
       })
-    } catch (e) {
+    } catch {
       toast({
         title: 'Feedback failed',
         description: 'Could not save feedback. The bundle was still updated locally.',
@@ -284,10 +340,7 @@ export default function DemoPage() {
 
       addEvent('CART_CREATED', 'Shopify cart created', {}, { cartId: result.cartId })
 
-      toast({
-        title: 'Cart created',
-        description: 'Ready to add items',
-      })
+      toast({ title: 'Cart created', description: 'Ready to add items' })
     } catch (error) {
       setCart(prev => ({ ...prev, isCreating: false }))
       toast({
@@ -332,10 +385,7 @@ export default function DemoPage() {
       addEvent('CART_LINES_ADDED', `Added ${lines.length} items to cart`, {}, { lineCount: lines.length })
       addEvent('CHECKOUT_LINK_READY', 'Checkout URL generated. User must click to proceed', {}, { checkoutUrl: result.checkoutUrl })
 
-      toast({
-        title: 'Items added to cart',
-        description: 'Checkout is now available',
-      })
+      toast({ title: 'Items added to cart', description: 'Checkout is now available' })
     } catch (error) {
       setCart(prev => ({ ...prev, isAddingLines: false }))
       toast({
@@ -347,14 +397,11 @@ export default function DemoPage() {
   }, [cart.cartId, bundle, addEvent])
 
   const handleOpenCheckout = useCallback(() => {
-    if (cart.checkoutUrl) {
-      window.open(cart.checkoutUrl, '_blank', 'noopener,noreferrer')
-    }
+    if (cart.checkoutUrl) window.open(cart.checkoutUrl, '_blank', 'noopener,noreferrer')
   }, [cart.checkoutUrl])
 
   const handleExplain = useCallback(async () => {
     if (!bundle) return
-
     setIsExplaining(true)
     try {
       const text = rawExplanation || 'No explanation was returned by the backend.'
@@ -412,6 +459,13 @@ export default function DemoPage() {
         onCancel={handlePasskeyCancel}
         onRetry={handlePasskeyRetry}
       />
+
+      {showVoiceExplainer && (
+        <VoiceExplainer
+          explanation={voiceExplanation || explanation?.text || ''}
+          onClose={() => setShowVoiceExplainer(false)}
+        />
+      )}
     </DashboardLayout>
   )
 }

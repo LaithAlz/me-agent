@@ -204,7 +204,7 @@ function getMaxTotal(form: IntentForm): number {
 // -------------------------------
 export async function recommendBundle(payload: RecommendRequest): Promise<RecommendResponse> {
   await delay(200)
-  return apiRequest<RecommendResponse>('/recommend', {
+  return apiRequest<RecommendResponse>('/api/agent/recommend', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
@@ -249,7 +249,7 @@ export async function generateBundle(
 
 export async function sendFeedback(payload: FeedbackRequest): Promise<FeedbackResponse> {
   await delay(200)
-  return apiRequest<FeedbackResponse>('/feedback', {
+  return apiRequest<FeedbackResponse>('/api/agent/feedback', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
