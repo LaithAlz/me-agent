@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     BACKBOARD_API_KEY: Optional[str] = None
 
     # MongoDB
-    MONGO_URI: Optional[str] = None
+    MONGODB_URI: Optional[str] = None
     MONGODB_DB_NAME: str = "meagent"
 
     # ElevenLabs Voice API
