@@ -113,6 +113,8 @@ export default function DemoPage() {
   const [showVoiceExplainer, setShowVoiceExplainer] = useState(false)
   const [voiceExplanation, setVoiceExplanation] = useState<string | null>(null)
   const [blockedItems, setBlockedItems] = useState<string[]>([])
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
 
   const { addEvent, getRecentEvents } = useAuditLog()
 
@@ -451,6 +453,7 @@ export default function DemoPage() {
             bundle={bundle}
             isLoading={isExplaining}
             onExplain={handleExplain}
+            avatarUrl={avatarUrl}
           />
 
           <AuditPreviewPanel events={getRecentEvents()} />
@@ -469,6 +472,8 @@ export default function DemoPage() {
         <VoiceExplainer
           explanation={voiceExplanation || explanation?.text || ''}
           onClose={() => setShowVoiceExplainer(false)}
+          avatarUrl={avatarUrl}
+          setAvatarUrl={setAvatarUrl}
         />
       )}
     </DashboardLayout>

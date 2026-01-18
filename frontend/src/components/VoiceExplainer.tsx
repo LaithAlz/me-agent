@@ -14,12 +14,13 @@ import { CameraModal } from './CameraModal';
 interface VoiceExplainerProps {
   explanation?: string;
   onClose?: () => void;
+  avatarUrl?: string;
+  setAvatarUrl?: (url: string) => void;
 }
 
-export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
+export function VoiceExplainer({ explanation, onClose, avatarUrl, setAvatarUrl }: VoiceExplainerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoadingVoice, setIsLoadingVoice] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -31,23 +32,6 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Load user's avatar on mount
-  useEffect(() => {
-    const loadAvatar = async () => {
-      try {
-        const data = await getAvatar();
-        if (data.hasAvatar && data.avatarBase64) {
-          const mimeType = data.avatarFormat === 'svg+xml' ? 'image/svg+xml' : 'image/jpeg';
-          setAvatarUrl(`data:${mimeType};base64,${data.avatarBase64}`);
-        }
-      } catch (e) {
-        console.error('Failed to load avatar:', e);
-      }
-    };
-    
-    loadAvatar();
-  }, []);
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
