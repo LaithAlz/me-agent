@@ -45,9 +45,9 @@ class Settings(BaseSettings):
     GOOGLE_GENERATIVE_AI_API_KEY: Optional[str] = None
 
     # WebAuthn settings
-    WEBAUTHN_RP_ID: str = "localhost"
+    WEBAUTHN_RP_ID: str = "me-agent.tech"
+    WEBAUTHN_ORIGIN: str = "https://me-agent.tech"
     WEBAUTHN_RP_NAME: str = "Me-Agent Demo"
-    WEBAUTHN_ORIGIN: str = "http://localhost:8080"
 
     # Demo mode
     DEMO_MODE: bool = True
@@ -55,14 +55,22 @@ class Settings(BaseSettings):
     # CORS
     # Add your deployed frontend domains here
     CORS_ORIGINS: list[str] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-        "https://me-agent.tech",
-        "https://www.me-agent.tech",
-        "https://me-agent-gbvn1a6l4-laithalzs-projects.vercel.app",
-    ]
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:8080",
+  "http://127.0.0.1:8080",
+
+  # your custom domain
+  "https://me-agent.tech",
+  "https://www.me-agent.tech",
+
+  # your current Vercel preview domain (the one in the error)
+  "https://me-agent-git-main-laithalzs-projects.vercel.app",
+
+  # strongly recommended for future preview URLs
+  "https://me-agent.vercel.app",
+   ]
+
 
 
 @lru_cache()

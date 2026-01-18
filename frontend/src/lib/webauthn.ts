@@ -92,7 +92,7 @@ export interface RegisterResult {
 export async function registerPasskey(username: string, displayName?: string): Promise<RegisterResult> {
   try {
     // Step 1: Get registration options from server
-    const optionsResponse = await fetch(`${API_BASE}/auth/register/options`, {
+    const optionsResponse = await fetch(`${API_BASE}/api/auth/register/options`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -176,7 +176,7 @@ export async function registerAdditionalPasskey(displayName?: string): Promise<R
     // Step 3: Send credential to server for verification
     const attestationResponse = credential.response as AuthenticatorAttestationResponse;
     
-    const verifyResponse = await fetch(`${API_BASE}/auth/register-additional/verify`, {
+    const verifyResponse = await fetch(`${API_BASE}/api/auth/register-additional/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -260,7 +260,7 @@ async function performWebAuthnRegistration(options: any, username: string): Prom
     // Step 3: Send credential to server for verification
     const attestationResponse = credential.response as AuthenticatorAttestationResponse;
     
-    const verifyResponse = await fetch(`${API_BASE}/auth/register/verify`, {
+    const verifyResponse = await fetch(`${API_BASE}/api/auth/register/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -324,7 +324,7 @@ export interface AuthResult {
 export async function authenticatePasskey(username?: string): Promise<AuthResult> {
   try {
     // Step 1: Get authentication options from server
-    const optionsResponse = await fetch(`${API_BASE}/auth/login/options`, {
+    const optionsResponse = await fetch(`${API_BASE}/api/auth/login/options`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -363,7 +363,7 @@ export async function authenticatePasskey(username?: string): Promise<AuthResult
     // Step 3: Send credential to server for verification
     const assertionResponse = credential.response as AuthenticatorAssertionResponse;
     
-    const verifyResponse = await fetch(`${API_BASE}/auth/login/verify`, {
+    const verifyResponse = await fetch(`${API_BASE}/api/auth/login/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -431,7 +431,7 @@ export async function authorizeActionWithPasskey(action: string): Promise<AuthRe
     console.log('Platform authenticator available, checking for registered passkey...');
 
     // Check if we have a session (user already registered)
-    const sessionResponse = await fetch(`${API_BASE}/auth/session`, {
+    const sessionResponse = await fetch(`${API_BASE}/api/auth/session`, {
       credentials: 'include',
     });
     
