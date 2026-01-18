@@ -157,10 +157,10 @@ export default function WebStore() {
         <DashboardLayout> 
             <div className="max-w-7xl mx-auto p-6">
                 <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                    <h1 className="text-3xl font-bold text-white mb-2">
                         Welcome to Our Store!
                     </h1>
-                    <p className="text-muted-foreground">
+                    <p className="text-white opacity-80">
                         Browse our curated catalog and add items to your checkout.
                     </p>
                 </div>
@@ -247,7 +247,7 @@ export default function WebStore() {
                 </div>
 
                 {isLoading ? (
-                    <p className="text-gray-600">Loading products...</p>
+                    <p className="text-white opacity-80">Loading products...</p>
                 ) : (
                     <ProductGrid
                         products={filteredProducts}

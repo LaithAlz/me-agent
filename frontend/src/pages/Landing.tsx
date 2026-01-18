@@ -4,9 +4,9 @@ import { Shield, ArrowRight, CheckCircle, Lock, Eye, Zap, Crown } from 'lucide-r
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-background to-muted/20">  {/* <-- Added subtle gradient to the whole page */}
       {/* Header */}
-      <header className="border-b">
+      <header className="border-b bg-white/80 backdrop-blur-sm shadow-sm">  {/* <-- Added glassmorphism effect */}
         <div className="container mx-auto px-4">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center gap-2">
@@ -25,32 +25,34 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="pt-0 pb-20 md:pb-32 relative">
+      <section className="pt-0 pb-20 relative bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 text-white">  {/* <-- Added modern gradient background */}
+        <div className="absolute inset-0 bg-black/20"></div>  {/* <-- Overlay for better text contrast */}
         <div>
           <img
-            src="/favicon.ico"
+            src="/shopping.png"
             alt=""
-            className="mx-auto mb-10 animate-pulse [animation-duration:4s] opacity-80"
+            className="mx-auto animate-pulse [animation-duration:4s]"
           />
         </div>
-        <div className="container mx-auto px-4 text-center">          
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-verified/10 text-verified text-sm font-medium mb-6">
+        <div className="container mx-auto px-4 text-center relative z-10">  {/* <-- Added relative z-10 for text layering */}
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 text-white text-sm font-medium mb-6 backdrop-blur-sm">
             <Shield className="h-4 w-4" />
             Secure by Design
           </div>
           
-          <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6 max-w-4xl mx-auto">
-            A Secure, Identity-Bound
-            <br />
-            <span className="text-primary">AI Shopping Agent</span>
+          <h1 className="text-4xl md:text-6xl font-bold mb-6 drop-shadow-lg leading-tight">
+            Welcome to{" "}
+            <span className="bg-gradient-to-r from-yellow-300 to-green-400 bg-clip-text text-transparent">
+              Me-Agent
+            </span>
           </h1>
-          
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
+          <p className="text-xl md:text-2xl mb-8 drop-shadow-md">  {/* <-- Added opacity and shadow */}
+            Your AI-powered shopping assistant
+          </p>          
+          <p className="text-xl max-w-2xl mx-auto opacity-80 mb-10">
             Separating Memory, Reasoning, and Authority. Consent-bound actions, 
             fully auditable, with no autonomous purchases.
           </p>
-
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/demo">
               <Button size="lg" className="w-full sm:w-auto">
@@ -59,7 +61,7 @@ export default function LandingPage() {
               </Button>
             </Link>
             <Link to="/audit">
-              <Button size="lg" variant="outline" className="w-full sm:w-auto">
+              <Button className="bg-white text-purple-600 hover:bg-gray-100 shadow-lg hover:shadow-xl transition-all duration-300">  {/* <-- Enhanced button with shadow and transition */}
                 View Audit Log
               </Button>
             </Link>
@@ -95,7 +97,7 @@ export default function LandingPage() {
       </section>
 
       {/* Trust Features */}
-      <section className="py-20 bg-muted/50">
+      <section className="py-20 bg-gray-200">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto">
             <h2 className="text-2xl md:text-3xl font-bold text-center mb-12">
@@ -133,7 +135,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t py-8">
+      <footer className="border-t py-8 bg-gray-900 text-white">
         <div className="container mx-auto px-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
@@ -160,9 +162,9 @@ function ConceptCard({
   description: string;
 }) {
   return (
-    <div className="text-center p-6 rounded-xl bg-card border">
-      <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-        <Icon className="h-6 w-6 text-primary" />
+    <div className="text-center p-6 rounded-xl bg-card border shadow-lg hover:shadow-xl transition-shadow duration-300">  {/* <-- Added shadow and hover effect */}
+      <div className="h-12 w-12 rounded-full bg-gradient-to-r from-primary to-secondary flex items-center justify-center mx-auto mb-4">  {/* <-- Gradient on icon bg */}
+        <Icon className="h-6 w-6 text-white" />
       </div>
       <h3 className="text-lg font-semibold mb-2">{title}</h3>
       <p className="text-sm text-muted-foreground">{description}</p>
@@ -172,7 +174,7 @@ function ConceptCard({
 
 function TrustItem({ text }: { text: string }) {
   return (
-    <div className="flex items-center gap-3 p-4 rounded-lg bg-card border">
+    <div className="flex items-center gap-3 p-4 rounded-lg bg-card border shadow-md hover:shadow-lg transition-shadow duration-300">  {/* <-- Added shadow and hover */}
       <CheckCircle className="h-5 w-5 text-verified shrink-0" />
       <span className="text-sm font-medium">{text}</span>
     </div>

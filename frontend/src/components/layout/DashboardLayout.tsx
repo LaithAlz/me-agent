@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Crown, Bot, FileText, Menu, X, Store, ShoppingCart } from 'lucide-react';
+import { Crown, Bot, FileText, Menu, X, Store, ShoppingCart, Shield } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
@@ -15,7 +15,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gray-900">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="container mx-auto px-4">
@@ -90,7 +90,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
       <div className="border-b bg-security-banner">
         <div className="container mx-auto px-4 py-2">
           <div className="flex items-center justify-center gap-2 text-sm">
-            <Crown className="h-4 w-4 text-verified" />
+            <Shield className="h-4 w-4 text-verified" />
             <span className="text-muted-foreground">
               <strong className="text-foreground">No autonomous purchase.</strong> Checkout requires user click.
             </span>

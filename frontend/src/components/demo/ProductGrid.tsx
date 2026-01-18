@@ -9,7 +9,7 @@ interface ProductGridProps {
 export function ProductGrid({ products, onAddToCart, cartQuantities }: ProductGridProps) {
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-semibold text-gray-900">Our Products</h2>
+      <h2 className="text-2xl font-bold opacity-80 text-white">Our Products</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {products.map((product) => (
           <ProductCard
@@ -35,7 +35,7 @@ function ProductCard({ product, onAddToCart, cartQty }: ProductCardProps) {
   const isOutOfStock = product.stockQuantity <= 0;
   const canAdd = remaining > 0;
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+    <div className="bg-white rounded-lg shadow-sm border pt-6 border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
       <div className="h-48 w-full bg-muted/40 flex items-center justify-center overflow-hidden">
         <img
           src={product.imageUrl}

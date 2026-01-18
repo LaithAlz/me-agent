@@ -80,11 +80,11 @@ export default function CheckoutPage() {
     <DashboardLayout>
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-2xl text-white font-bold flex items-center gap-2">
             <ShoppingCart className="h-6 w-6" />
             Checkout
           </h1>
-          <Button variant="ghost" onClick={handleClear} disabled={items.length === 0}>
+          <Button variant="ghost" className="bg-white" onClick={handleClear} disabled={items.length === 0}>
             <Trash2 className="h-4 w-4 mr-2" />
             Clear cart
           </Button>
