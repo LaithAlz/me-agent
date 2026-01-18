@@ -93,8 +93,9 @@ async def register_options(request: RegisterOptionsRequest):
         attestation="none",
         authenticatorSelection={
             "authenticatorAttachment": "platform",
-            "userVerification": "preferred",
-            "residentKey": "preferred",
+            "userVerification": "required",
+            "residentKey": "required",
+            "transports": ["internal"],
         },
         demoMode=settings.DEMO_MODE,
     )
@@ -165,6 +166,117 @@ async def register_verify(request: RegisterVerifyRequest, response: Response):
 
 
 # ============================================================
+# Additional Passkey Registration (for existing users)
+# ============================================================
+
+@router.post("/register-additional/options", response_model=RegisterOptionsResponse)
+async def register_additional_options(
+    request: RegisterOptionsRequest,
+    meagent_user: Optional[str] = Cookie(None),
+):
+    """
+    Register an additional passkey for an already-authenticated user.
+    Requires existing session (meagent_user cookie).
+    """
+    settings = get_settings()
+    
+    # Require authentication
+    if not meagent_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Get existing user
+    user = await get_user_by_id(meagent_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Generate challenge
+    challenge = generate_challenge()
+    
+    # Store pending challenge with existing user ID
+    display_name = request.displayName or f"Passkey {len(user.get('credentials', []))+1}"
+    _pending_challenges[f"{meagent_user}_add"] = {
+        "challenge": challenge,
+        "userId": meagent_user,
+        "displayName": display_name,
+        "type": "register_additional",
+        "createdAt": datetime.utcnow().isoformat(),
+    }
+    
+    # Build WebAuthn options with existing user info
+    options = RegisterOptionsResponse(
+        challenge=challenge,
+        rp={
+            "id": settings.WEBAUTHN_RP_ID,
+            "name": settings.WEBAUTHN_RP_NAME,
+        },
+        user={
+            "id": base64.urlsafe_b64encode(meagent_user.encode()).decode(),
+            "name": request.username,
+            "displayName": display_name,
+        },
+        pubKeyCredParams=[
+            {"type": "public-key", "alg": -7},   # ES256
+            {"type": "public-key", "alg": -257}, # RS256
+        ],
+        timeout=60000,
+        attestation="none",
+        authenticatorSelection={
+            "authenticatorAttachment": "platform",
+            "userVerification": "required",
+            "residentKey": "required",
+            "transports": ["internal"],
+        },
+        demoMode=settings.DEMO_MODE,
+    )
+    
+    return options
+
+
+@router.post("/register-additional/verify", response_model=RegisterVerifyResponse)
+async def register_additional_verify(
+    request: RegisterVerifyRequest,
+    meagent_user: Optional[str] = Cookie(None),
+):
+    """
+    Verify and register an additional passkey for an existing user.
+    """
+    settings = get_settings()
+    
+    # Require authentication
+    if not meagent_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Get pending challenge
+    pending = _pending_challenges.get(f"{meagent_user}_add")
+    if not pending or pending["type"] != "register_additional":
+        raise HTTPException(status_code=400, detail="No pending passkey registration")
+    
+    if settings.DEMO_MODE:
+        # Demo mode: Accept and store the credential
+        credential_id = request.credential.get("id", f"demo_cred_{uuid.uuid4().hex[:8]}")
+        
+        # Add credential to user
+        await save_credential(meagent_user, {
+            "credentialId": credential_id,
+            "publicKey": "demo_public_key",
+            "signCount": 0,
+            "transports": ["internal"],
+            "displayName": pending["displayName"],
+        })
+        
+        # Clean up challenge
+        del _pending_challenges[f"{meagent_user}_add"]
+        
+        return RegisterVerifyResponse(
+            success=True,
+            userId=meagent_user,
+            message=f"Demo mode: Additional passkey '{pending['displayName']}' registered successfully",
+        )
+    else:
+        raise HTTPException(status_code=501, detail="Production WebAuthn not implemented yet")
+
+
+# ============================================================
 # Login Flow
 # ============================================================
 
@@ -211,7 +323,7 @@ async def login_options(request: LoginOptionsRequest):
         rpId=settings.WEBAUTHN_RP_ID,
         allowCredentials=allow_credentials,
         timeout=60000,
-        userVerification="preferred",
+        userVerification="required",
         demoMode=settings.DEMO_MODE,
     )
 

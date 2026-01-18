@@ -20,6 +20,7 @@ import {
   Camera,
   User,
   RefreshCw,
+  Fingerprint,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { AvatarUpload } from '@/components/AvatarUpload';
+import { PasskeyRegistrationModal } from '@/components/PasskeyRegistrationModal';
 import {
   getPolicy,
   updatePolicy,
@@ -65,6 +67,7 @@ interface AuthorityPanelProps {
 export function AuthorityPanel({ className }: AuthorityPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('policy');
+  const [isPasskeyModalOpen, setIsPasskeyModalOpen] = useState(false);
   
   // Backend connection state
   const [backendConnected, setBackendConnected] = useState(false);
@@ -331,12 +334,37 @@ export function AuthorityPanel({ className }: AuthorityPanelProps) {
           </div>
           
           {/* Avatar Upload Button */}
-          <div className="mt-3 pt-3 border-t">
+          <div className="mt-3 pt-3 border-t space-y-2">
             <AvatarUpload 
               onAvatarGenerated={(base64) => setAvatarUrl(`data:image/jpeg;base64,${base64}`)}
               className="w-full"
             />
+            
+            {/* Register New Passkey Button */}
+            {session?.authenticated && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-2"
+                onClick={() => setIsPasskeyModalOpen(true)}
+              >
+                <Fingerprint className="h-4 w-4" />
+                Register New Passkey
+              </Button>
+            )}
           </div>
+          
+          {/* Passkey Registration Modal */}
+          {session?.authenticated && (
+            <PasskeyRegistrationModal
+              isOpen={isPasskeyModalOpen}
+              onClose={() => setIsPasskeyModalOpen(false)}
+              username={session.username || 'user'}
+              onSuccess={() => {
+                console.log('Passkey registered successfully!');
+              }}
+            />
+          )}
         </div>
         
         {/* Tabs */}
@@ -393,16 +421,19 @@ export function AuthorityPanel({ className }: AuthorityPanelProps) {
                 {/* Max Spend */}
                 <div className="space-y-2">
                   <Label htmlFor="max-spend" className="text-sm">
-                    Maximum Spend: ${policy.maxSpend}
+                    Maximum Spend (CAD): ${policy.maxSpend}
                   </Label>
-                  <Input
-                    id="max-spend"
-                    type="number"
-                    min={0}
-                    max={10000}
-                    value={policy.maxSpend}
-                    onChange={(e) => handlePolicyChange({ maxSpend: Number(e.target.value) })}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="max-spend"
+                      type="number"
+                      min={0}
+                      max={10000}
+                      value={policy.maxSpend}
+                      onChange={(e) => handlePolicyChange({ maxSpend: Number(e.target.value) })}
+                    />
+                    <span className="text-muted-foreground text-sm font-medium">CAD</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -560,7 +591,7 @@ export function AuthorityPanel({ className }: AuthorityPanelProps) {
                   <strong>Agent:</strong> {policy.agentEnabled ? 'Enabled' : 'Disabled'}
                 </p>
                 <p>
-                  <strong>Budget:</strong> ${policy.maxSpend}
+                  <strong>Budget:</strong> ${policy.maxSpend} CAD
                 </p>
                 <p>
                   <strong>Categories:</strong> {policy.allowedCategories.join(', ')}

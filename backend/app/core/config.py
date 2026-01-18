@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     APP_NAME: str = "Me-Agent"
     DEBUG: bool = True
     SECRET_KEY: str = "dev-secret-key-change-in-production"
+    
+    # Currency
+    DEFAULT_CURRENCY: str = "CAD"
+    
+    # 1Password integration
     BACKBOARD_API_KEY: Optional[str] = None
 
     # MongoDB
@@ -44,7 +49,12 @@ class Settings(BaseSettings):
     DEMO_MODE: bool = True
 
     # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:8080", "http://127.0.0.1:8080"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080"
+    ]
 
 
 @lru_cache()
