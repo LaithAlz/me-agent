@@ -56,7 +56,7 @@ MONGO_DB_NAME = (
 
 # Backboard LLM routing (dynamic, not hardcoded)
 DECISION_PROVIDER = getattr(settings, "DECISION_PROVIDER", None) or os.getenv("DECISION_PROVIDER") or "openai"
-DECISION_MODEL = getattr(settings, "DECISION_MODEL", None) or os.getenv("DECISION_MODEL") or "gpt-4.1-mini"
+DECISION_MODEL = getattr(settings, "DECISION_MODEL", None) or os.getenv("DECISION_MODEL") or "gpt-4.1"
 
 EXPLAIN_PROVIDER = getattr(settings, "EXPLAIN_PROVIDER", None) or os.getenv("EXPLAIN_PROVIDER") or "openai"
 EXPLAIN_MODEL = getattr(settings, "EXPLAIN_MODEL", None) or os.getenv("EXPLAIN_MODEL") or "gpt-5-mini"
@@ -211,10 +211,14 @@ def generate_bundle(payload: BundleRequest) -> BundleResult:
 
 	return BundleResult(items=selected_items, subtotal=subtotal, currency="USD")
 class FeedbackRequest(BaseModel):
-    user_id: str
-    rejected_items: list[str]
-    kept_items: Optional[list[str]] = None  # optional
-    reason: str
+    user_id: str = Field(..., alias="userId")
+    rejected_items: list[str] = Field(default_factory=list, alias="rejectedItems")
+    kept_items: Optional[list[str]] = Field(default=None, alias="keptItems")
+    reason: str = Field("", alias="reason")
+
+    # Pydantic v2
+    model_config = {"populate_by_name": True}
+
 
 
 # ============================================================
@@ -827,17 +831,17 @@ async def recommend(req: RecommendationRequest):
         ],
         "cart_reference": "Use the latest decision in this thread as the chosen cart and reference only items from the provided inventory when listing avoided examples.",
     }
-    explanation_obj = await _add_message_with_timeout(
-    stage="add_message explanation",
-    timeout_s=EXPLAIN_TIMEOUT_S,
-    thread_id=str(thread_id),
-    content=json.dumps(explain_prompt),
-    llm_provider=EXPLAIN_PROVIDER,
-    model_name=EXPLAIN_MODEL,
-    memory="off",  # was "Auto"
-    stream=False,
-    )
 
+    explanation_obj = await _add_message_with_timeout(
+        stage="add_message explanation",
+        timeout_s=EXPLAIN_TIMEOUT_S,
+        thread_id=str(thread_id),
+        content=json.dumps(explain_prompt),
+        llm_provider=EXPLAIN_PROVIDER,
+        model_name=EXPLAIN_MODEL,
+        memory="off",
+        stream=False,
+    )
 
     # One retry
     if explanation_obj is None:
@@ -848,7 +852,7 @@ async def recommend(req: RecommendationRequest):
             content=json.dumps(explain_prompt),
             llm_provider=EXPLAIN_PROVIDER,
             model_name=EXPLAIN_MODEL,
-            memory="Auto",
+            memory="off",
             stream=False,
         )
 
@@ -968,6 +972,8 @@ async def explain(req: ExplainRequest):
 
 @router.post("/feedback")
 async def record_feedback(req: FeedbackRequest):
+    print("feedback payload:", req.dict())
+
     mem_doc = _db_get_user_memory(req.user_id) or {}
     memory_payload = mem_doc.get("memory") or _default_memory(max_total=500)
 
