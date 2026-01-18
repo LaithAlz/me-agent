@@ -23,3 +23,7 @@ itsdangerous==2.1.2
 
 # Base64 image handling
 pillow>=11.0.0
+
+backboard
+backboard-sdk
+python-multipart
