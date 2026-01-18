@@ -41,7 +41,7 @@ export default function WebStore() {
     } = useQuery<Product[]>({
         queryKey: ["shopify-products"],
         queryFn: async (): Promise<Product[]> => {
-            const response = await fetch(`${API_BASE}/api/shopify/products/search`);
+            const response = await fetch(`${API_BASE}/api/shopify/products/search?limit=500`);
             if (!response.ok) {
                 throw new Error("Failed to load products");
             }
