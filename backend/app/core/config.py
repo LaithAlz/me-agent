@@ -45,9 +45,9 @@ class Settings(BaseSettings):
     GOOGLE_GENERATIVE_AI_API_KEY: Optional[str] = None
 
     # WebAuthn settings
-    WEBAUTHN_RP_ID: str = "localhost"
+    WEBAUTHN_RP_ID: str = "me-agent.tech"
+    WEBAUTHN_ORIGIN: str = "https://me-agent.tech"
     WEBAUTHN_RP_NAME: str = "Me-Agent Demo"
-    WEBAUTHN_ORIGIN: str = "http://localhost:8080"
 
     # Demo mode
     DEMO_MODE: bool = True
