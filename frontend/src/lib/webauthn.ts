@@ -3,7 +3,7 @@
  * Handles real passkey registration and authentication using the Web Authentication API
  */
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'https://me-agent.onrender.com';
 
 // ============================================================
 // Types
@@ -133,7 +133,7 @@ export async function registerPasskey(username: string, displayName?: string): P
 export async function registerAdditionalPasskey(displayName?: string): Promise<RegisterResult> {
   try {
     // Step 1: Get registration options for additional passkey
-    const optionsResponse = await fetch(`${API_BASE}/auth/register-additional/options`, {
+    const optionsResponse = await fetch(`${API_BASE}/api/auth/register-additional/options`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',

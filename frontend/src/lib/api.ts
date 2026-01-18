@@ -1,9 +1,9 @@
-// Me-Agent API Client
-// - Calls FastAPI: /recommend, /feedback, and /agent/bundle
+// Me-Agent API Client (Vite)
+// - Calls FastAPI: /recommend and /feedback
 // - Adapts backend cart JSON into your UI BundleResult shape
 // - Keeps passkey demo helpers and Shopify helpers
 
-import type { BundleResult, ExplainResult, IntentForm, CartItem } from '@/types'
+import type { BundleResult, ExplainResult, IntentForm } from '@/types'
 
 import {
   isPlatformAuthenticatorAvailable,
@@ -11,7 +11,7 @@ import {
   isWebAuthnSupported,
 } from './webauthn'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+const API_BASE = process.env.VITE_API_BASE_URL || 'https://me-agent.onrender.com';
 
 // Simulated delay for realistic UX
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -134,22 +134,6 @@ function safeJsonParse<T>(s: string): T | null {
   }
 }
 
-export async function generateBundle(
-  payload: IntentForm & { cartItems?: CartItem[] }
-): Promise<BundleResult> {
-  await delay(1200)
-
-  const cartItems = (payload.cartItems ?? []).map(item => ({
-    id: item.id,
-    qty: item.qty,
-  }))
-
-  return apiRequest<BundleResult>('/api/agent/bundle', {
-    method: 'POST',
-    body: JSON.stringify({ ...payload, personaId: 'alex', cartItems }),
-  })
-}
-
 type BackendCart = {
   items?: Array<{
     name?: string
@@ -178,7 +162,6 @@ function adaptCartToBundle(cartJson: string): BundleResult {
     const price = Number(it.price ?? 0)
     const qty = Number(it.qty ?? 1)
     const reasonTags = Array.isArray(it.tags) ? it.tags : []
-    const category = String((it as any).category ?? 'office')
 
     const id =
       (typeof it.id === 'string' && it.id.length ? it.id : null) ??
@@ -191,7 +174,6 @@ function adaptCartToBundle(cartJson: string): BundleResult {
       merchant,
       price,
       qty,
-      category,
       reasonTags,
       // Optional fields your app may later use
       merchandiseId: it.merchandiseId,
@@ -285,6 +267,14 @@ export async function generateBundleWithExplain(
   return { bundle, explanation: resp.explanation }
 }
 
+// Keep the old signature available if other parts still call it
+export async function generateBundle(
+  payload: IntentForm & { userId: string; products: Product[] }
+): Promise<BundleResult> {
+  const { bundle } = await generateBundleWithExplain(payload)
+  return bundle
+}
+
 export async function sendFeedback(payload: FeedbackRequest): Promise<FeedbackResponse> {
   await delay(200)
   return apiRequest<FeedbackResponse>('/api/agent/feedback', {
@@ -298,23 +288,9 @@ export async function sendFeedback(payload: FeedbackRequest): Promise<FeedbackRe
 // Your backend already returns explanation on /recommend
 // Keep this for compatibility with ExplainPanel expecting ExplainResult
 // -------------------------------
-export async function explainBundle(payload: { intent: string; bundle: BundleResult }): Promise<ExplainResult> {
+export async function explainBundle(payload: { text: string }): Promise<ExplainResult> {
   await delay(100)
-  try {
-    return apiRequest<ExplainResult>('/api/agent/explain', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    })
-  } catch {
-    const lines = payload.bundle.items
-      .map((item) => {
-        const tags = item.reasonTags?.length ? ` (${item.reasonTags.join(', ')})` : ''
-        return `• ${item.title}${tags}`
-      })
-      .join('\n')
-    const text = `Based on your intent, Me-Agent selected ${payload.bundle.items.length} item(s):\n${lines}`
-    return { text }
-  }
+  return { text: payload.text } as ExplainResult
 }
 
 // -------------------------------
