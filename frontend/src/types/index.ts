@@ -95,19 +95,23 @@ export interface IntentForm {
 }
 
 export const AVAILABLE_CATEGORIES = [
-  'accessories',
-  'books',
-  'construction',
-  'electronics',
-  'entertainment',
-  'fashion',
-  'fitness',
-  'grocery',
-  'home',
-  'lifestyle',
-  'office',
-  'smart_home',
-  'wellness',
+  "office",
+  "electronics",
+  "clothing",
+  "home",
+  "sports",
+  "books",
+  "beauty",
+  "food",
+  "accessories",
+  "lifestyle",
+  "fashion",
+  "grocery",
+  "fitness",
+  "entertainment",
+  "wellness",
+  "smart_home",
+  "construction",
 ] as const;
 
 export const DEFAULT_PERMISSION_POLICY: PermissionPolicy = {
