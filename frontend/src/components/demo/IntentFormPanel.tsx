@@ -58,9 +58,14 @@ export function IntentFormPanel({
   }, [allowAll, availableCategories]);
 
   useEffect(() => {
-    if (form.allowedCategories.length === 0 && availableCategories.length > 0) {
-      setAllowAll(true);
-      updateField('allowedCategories', availableCategories);
+    if (availableCategories.length > 0) {
+      const isAllSelected = form.allowedCategories.length === availableCategories.length && form.allowedCategories.every(c => availableCategories.includes(c));
+      if (isAllSelected) {
+        setAllowAll(true);
+      } else if (form.allowedCategories.length === 0) {
+        setAllowAll(true);
+        updateField('allowedCategories', availableCategories);
+      }
     }
   }, [availableCategories]);  
 
