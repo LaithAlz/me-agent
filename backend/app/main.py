@@ -80,7 +80,7 @@ app.add_middleware(
 )
 print("backboard module file:", backboard.__file__)
 print("backboard version:", getattr(backboard, "__version__", "no __version__"))
-print("has add_memory:", hasattr(BackboardClient(api_key=settings.BACKBOARD_API_KEY"), "add_memory"))
+print("has add_memory:", hasattr(BackboardClient(api_key=settings.BACKBOARD_API_KEY), "add_memory"))
 
 
 
