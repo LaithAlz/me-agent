@@ -3,15 +3,21 @@ import { Product } from "../../types/index.ts";
 interface ProductGridProps {
   products: Product[];
   onAddToCart?: (product: Product) => void;
+  cartQuantities?: Record<string, number>;
 }
 
-export function ProductGrid({ products, onAddToCart }: ProductGridProps) {
+export function ProductGrid({ products, onAddToCart, cartQuantities }: ProductGridProps) {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-semibold text-gray-900">Our Products</h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {products.map((product) => (
-          <ProductCard key={product.id} product={product} onAddToCart={onAddToCart} />
+          <ProductCard
+            key={product.id}
+            product={product}
+            onAddToCart={onAddToCart}
+            cartQty={cartQuantities?.[product.id] ?? 0}
+          />
         ))}
       </div>
     </div>
@@ -21,9 +27,13 @@ export function ProductGrid({ products, onAddToCart }: ProductGridProps) {
 interface ProductCardProps {
   product: Product;
   onAddToCart?: (product: Product) => void;
+  cartQty: number;
 }
 
-function ProductCard({ product, onAddToCart }: ProductCardProps) {
+function ProductCard({ product, onAddToCart, cartQty }: ProductCardProps) {
+  const remaining = Math.max(product.stockQuantity - cartQty, 0);
+  const isOutOfStock = product.stockQuantity <= 0;
+  const canAdd = remaining > 0;
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
       <div className="h-48 w-full bg-muted/40 flex items-center justify-center overflow-hidden">
@@ -55,20 +65,20 @@ function ProductCard({ product, onAddToCart }: ProductCardProps) {
         <div className="flex justify-between items-center">
           <span
             className={`px-2 py-1 text-xs rounded-full ${
-              product.inStock
+              !isOutOfStock
                 ? "bg-green-100 text-green-800"
                 : "bg-red-100 text-red-800"
             }`}
           >
-            {product.inStock ? "In Stock" : "Out of Stock"}
+            {!isOutOfStock ? `In Stock · ${remaining} left` : "Out of Stock · 0 left"}
           </span>
           <button
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              product.inStock
+              canAdd
                 ? "bg-blue-900 text-white hover:bg-blue-700"
                 : "bg-gray-300 text-gray-500 cursor-not-allowed"
             }`}
-            disabled={!product.inStock}
+            disabled={!canAdd}
             onClick={() => onAddToCart?.(product)}
           >
             Add to Cart

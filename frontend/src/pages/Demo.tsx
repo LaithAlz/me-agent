@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { IntentFormPanel } from '@/components/demo/IntentFormPanel';
@@ -22,7 +22,8 @@ import { authorizePasskey, generateBundle, explainBundle } from '@/lib/api';
 import type { 
   IntentForm, 
   BundleResult, 
-  ExplainResult, 
+  ExplainResult,
+  CartItem,
   PasskeyState 
 } from '@/types';
 import { DEFAULT_INTENT_FORM } from '@/types';
@@ -33,7 +34,8 @@ export default function DemoPage() {
   // Load persisted data on mount
   const [intentForm, setIntentForm] = useState<IntentForm>(() => loadLastIntent());
   const [bundle, setBundle] = useState<BundleResult | null>(() => loadLastBundle());
-  const [cartCount, setCartCount] = useState(() => loadCartItems().length);
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => loadCartItems());
+  const [cartCount, setCartCount] = useState(() => loadCartItems().reduce((sum, item) => sum + item.qty, 0));
   const [explanation, setExplanation] = useState<ExplainResult | null>(() => loadLastExplanation());
   const [isExplaining, setIsExplaining] = useState(false);
 
@@ -42,6 +44,13 @@ export default function DemoPage() {
   const [passkeyState, setPasskeyState] = useState<PasskeyState>('idle');
   const [isGenerating, setIsGenerating] = useState(false);
   const navigate = useNavigate();
+
+  const cartQuantities = useMemo(() => {
+    return cartItems.reduce<Record<string, number>>((acc, item) => {
+      acc[item.id] = (acc[item.id] ?? 0) + item.qty;
+      return acc;
+    }, {});
+  }, [cartItems]);
 
   // Audit log
   const { events, addEvent, getRecentEvents } = useAuditLog();
@@ -102,22 +111,29 @@ export default function DemoPage() {
         setIsGenerating(true);
         
         try {
-          const bundleResult = await generateBundle(intentForm);
+          const currentCart = loadCartItems();
+          setCartItems(currentCart);
+          setCartCount(currentCart.reduce((sum, item) => sum + item.qty, 0));
+          const bundleResult = await generateBundle({
+            ...intentForm,
+            cartItems: currentCart,
+          });
           setBundle(bundleResult);
           setExplanation(null);
-          setCartCount(loadCartItems().length);
+          setCartCount(loadCartItems().reduce((sum, item) => sum + item.qty, 0));
           
-          addEvent('BUNDLE_GENERATED', `Generated ${bundleResult.items.length} items totaling $${bundleResult.subtotal.toFixed(2)}`, {
+          const bundleItemCount = bundleResult.items.reduce((sum, item) => sum + item.qty, 0);
+          addEvent('BUNDLE_GENERATED', `Generated ${bundleItemCount} items totaling $${bundleResult.subtotal.toFixed(2)}`, {
             maxSpend: intentForm.maxSpend,
             allowedCategories: intentForm.allowedCategories,
           }, {
-            itemCount: bundleResult.items.length,
+            itemCount: bundleItemCount,
             subtotal: bundleResult.subtotal,
           });
 
           toast({
             title: 'Bundle generated',
-            description: `${bundleResult.items.length} items recommended within your $${intentForm.maxSpend} budget`,
+            description: `${bundleItemCount} items recommended within your $${intentForm.maxSpend} budget`,
           });
         } catch (error) {
           toast({
@@ -148,7 +164,9 @@ export default function DemoPage() {
     setIntentForm(DEFAULT_INTENT_FORM);
     setBundle(null);
     setExplanation(null);
-    setCartCount(loadCartItems().length);
+    const currentCart = loadCartItems();
+    setCartItems(currentCart);
+    setCartCount(currentCart.reduce((sum, item) => sum + item.qty, 0));
   }, []);
 
   const handleUpdateQuantity = useCallback((itemId: string, delta: number) => {
@@ -156,15 +174,17 @@ export default function DemoPage() {
     
     setBundle(prev => {
       if (!prev) return prev;
-      const items = prev.items.map(item => 
-        item.id === itemId 
-          ? { ...item, qty: Math.max(1, item.qty + delta) }
-          : item
-      );
+      const items = prev.items.map(item => {
+        if (item.id !== itemId) return item;
+        const maxQty = item.stockQuantity ?? Number.POSITIVE_INFINITY;
+        const remaining = Math.max(maxQty - (cartQuantities[item.id] ?? 0), 0);
+        const nextQty = Math.max(1, item.qty + delta);
+        return { ...item, qty: Math.min(nextQty, remaining || 1) };
+      });
       const subtotal = items.reduce((sum, item) => sum + (item.price * item.qty), 0);
       return { ...prev, items, subtotal: Math.round(subtotal * 100) / 100 };
     });
-  }, [bundle]);
+  }, [bundle, cartQuantities]);
 
   const handleRemoveItem = useCallback((itemId: string) => {
     if (!bundle) return;
@@ -179,6 +199,40 @@ export default function DemoPage() {
 
   const handleAddBundleToCart = useCallback(() => {
     if (!bundle) return;
+    const currentCart = loadCartItems();
+    const currentQuantities = currentCart.reduce<Record<string, number>>((acc, item) => {
+      acc[item.id] = (acc[item.id] ?? 0) + item.qty;
+      return acc;
+    }, {});
+
+    const outOfStock: string[] = [];
+    const insufficient: string[] = [];
+
+    bundle.items.forEach(item => {
+      const maxQty = item.stockQuantity ?? Number.POSITIVE_INFINITY;
+      const existingQty = currentQuantities[item.id] ?? 0;
+      const available = Math.max(maxQty - existingQty, 0);
+      if (available <= 0) {
+        outOfStock.push(item.title);
+      } else if (available < item.qty) {
+        insufficient.push(item.title);
+      }
+    });
+
+    if (outOfStock.length > 0 || insufficient.length > 0) {
+      const messages = [
+        outOfStock.length > 0 ? `Out of stock: ${outOfStock.join(', ')}` : null,
+        insufficient.length > 0 ? `Insufficient stock: ${insufficient.join(', ')}` : null,
+      ].filter(Boolean);
+
+      toast({
+        title: 'Bundle not added',
+        description: messages.join(' • '),
+        variant: 'destructive',
+      });
+      return;
+    }
+
     bundle.items.forEach(item => {
       addCartItem({
         id: item.id,
@@ -186,12 +240,18 @@ export default function DemoPage() {
         price: item.price,
         qty: item.qty,
         imageUrl: item.imageUrl,
+        stockQuantity: item.stockQuantity,
       });
     });
-    const updatedCount = loadCartItems().length;
+
+    const updatedCart = loadCartItems();
+    setCartItems(updatedCart);
+    const updatedCount = updatedCart.reduce((sum, item) => sum + item.qty, 0);
     setCartCount(updatedCount);
 
-    addEvent('CART_LINES_ADDED', `Added ${bundle.items.length} items to checkout`, {}, { lineCount: bundle.items.length });
+    const bundleItemCount = bundle.items.reduce((sum, item) => sum + item.qty, 0);
+    addEvent('CART_LINES_ADDED', `Added ${bundleItemCount} items to checkout`, {}, { lineCount: bundleItemCount });
+
     toast({
       title: 'Items added to checkout',
       description: 'Review them in the Checkout tab',
@@ -247,6 +307,7 @@ export default function DemoPage() {
             maxSpend={intentForm.maxSpend}
             onUpdateQuantity={handleUpdateQuantity}
             onRemoveItem={handleRemoveItem}
+            cartQuantities={cartQuantities}
           />
           
           <CartPanel

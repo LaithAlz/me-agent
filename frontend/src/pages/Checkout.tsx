@@ -111,13 +111,24 @@ export default function CheckoutPage() {
                     <div className="flex-1">
                       <p className="font-semibold">{item.title}</p>
                       <p className="text-sm text-muted-foreground">${item.price.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">In stock: {item.stockQuantity ?? '—'}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="icon" onClick={() => handleQtyChange(item.id, -1)}>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleQtyChange(item.id, -1)}
+                        disabled={item.qty <= 1}
+                      >
                         -
                       </Button>
                       <span className="w-8 text-center">{item.qty}</span>
-                      <Button variant="outline" size="icon" onClick={() => handleQtyChange(item.id, 1)}>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleQtyChange(item.id, 1)}
+                        disabled={typeof item.stockQuantity === 'number' && item.qty >= item.stockQuantity}
+                      >
                         +
                       </Button>
                     </div>

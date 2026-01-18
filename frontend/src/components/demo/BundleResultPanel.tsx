@@ -9,6 +9,7 @@ interface BundleResultPanelProps {
   maxSpend: number;
   onUpdateQuantity: (itemId: string, delta: number) => void;
   onRemoveItem: (itemId: string) => void;
+  cartQuantities?: Record<string, number>;
 }
 
 export function BundleResultPanel({
@@ -16,6 +17,7 @@ export function BundleResultPanel({
   maxSpend,
   onUpdateQuantity,
   onRemoveItem,
+  cartQuantities,
 }: BundleResultPanelProps) {
   if (!bundle) {
     return (
@@ -44,7 +46,7 @@ export function BundleResultPanel({
           <Package className="h-5 w-5 text-primary" />
           Recommended Bundle
           <Badge variant="secondary" className="ml-auto">
-            {bundle.items.length} items
+            {bundle.items.reduce((sum, item) => sum + item.qty, 0)} items
           </Badge>
         </CardTitle>
       </CardHeader>
@@ -57,6 +59,7 @@ export function BundleResultPanel({
               item={item}
               onUpdateQuantity={(delta) => onUpdateQuantity(item.id, delta)}
               onRemove={() => onRemoveItem(item.id)}
+              cartQty={cartQuantities?.[item.id] ?? 0}
             />
           ))}
         </div>
@@ -99,11 +102,16 @@ function BundleItemRow({
   item,
   onUpdateQuantity,
   onRemove,
+  cartQty,
 }: {
   item: BundleItem;
   onUpdateQuantity: (delta: number) => void;
   onRemove: () => void;
+  cartQty: number;
 }) {
+  const maxQty = item.stockQuantity ?? Number.POSITIVE_INFINITY;
+  const remaining = Math.max(maxQty - cartQty, 0);
+  const canIncrease = item.qty < remaining;
   return (
     <div className="py-4 first:pt-0 last:pb-0">
       <div className="flex gap-3">
@@ -125,6 +133,10 @@ function BundleItemRow({
               ${(item.price * item.qty).toFixed(2)}
             </span>
           </div>
+
+          <p className="text-xs text-muted-foreground">
+            Available: {Number.isFinite(remaining) ? remaining : '—'}
+          </p>
 
           {/* Reason Tags */}
           <div className="flex flex-wrap gap-1 mt-2">
@@ -156,6 +168,7 @@ function BundleItemRow({
                 size="icon"
                 className="h-7 w-7"
                 onClick={() => onUpdateQuantity(1)}
+                disabled={!canIncrease}
               >
                 <Plus className="h-3 w-3" />
               </Button>

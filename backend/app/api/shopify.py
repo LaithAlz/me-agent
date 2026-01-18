@@ -21,6 +21,7 @@ class Product(BaseModel):
 	tags: List[str] = Field(default_factory=list)
 	images: List[str] = Field(default_factory=list)
 	variants: List[ProductVariant]
+	stockQuantity: Optional[int] = None
 	inStock: Optional[bool] = None
 
 
@@ -656,7 +657,25 @@ _DEFAULT_PRODUCTS: List[Product] = [
 ]
 
 
-PRODUCTS: List[Product] = list(_DEFAULT_PRODUCTS)
+def _default_stock_for(product: Product) -> int:
+	digits = [int(ch) for ch in product.id if ch.isdigit()]
+	price_seed = int((product.variants[0].price if product.variants else 0) * 100)
+	seed = sum(digits) + price_seed
+	return 3 + (seed % 12)
+
+
+def _apply_stock_defaults(products: List[Product]) -> List[Product]:
+	for product in products:
+		if product.inStock is False:
+			product.stockQuantity = 0
+		elif product.stockQuantity is None:
+			product.stockQuantity = _default_stock_for(product)
+		if product.inStock is None:
+			product.inStock = (product.stockQuantity or 0) > 0
+	return products
+
+
+PRODUCTS: List[Product] = _apply_stock_defaults(list(_DEFAULT_PRODUCTS))
 
 
 PURCHASE_HISTORY: Dict[str, List[PurchaseHistoryItem]] = {
@@ -709,6 +728,15 @@ def _next_cart_id() -> str:
 	return f"cart_{_cart_counter}"
 
 
+def _find_product_by_merchandise(merchandise_id: str) -> Optional[Product]:
+	for product in PRODUCTS:
+		if product.id == merchandise_id:
+			return product
+		if any(variant.id == merchandise_id for variant in product.variants):
+			return product
+	return None
+
+
 @router.get("/products/search", response_model=List[Product])
 def search_products(
 	query: Optional[str] = Query(default=None, description="Search query"),
@@ -759,7 +787,12 @@ def cart_lines_add(payload: CartLinesAddRequest) -> CartLinesAddResponse:
 		raise HTTPException(status_code=404, detail="Cart not found")
 
 	for line in payload.lines:
-		cart.lines.append(CartLine(merchandiseId=line.merchandiseId, quantity=line.quantity))
+		product = _find_product_by_merchandise(line.merchandiseId)
+		max_qty = product.stockQuantity if product else None
+		quantity = line.quantity if max_qty is None else min(line.quantity, max_qty)
+		if quantity <= 0:
+			continue
+		cart.lines.append(CartLine(merchandiseId=line.merchandiseId, quantity=quantity))
 
 	checkout_url = f"https://checkout.shopify.com/mock/{cart.id}"
 	cart.checkoutUrl = checkout_url

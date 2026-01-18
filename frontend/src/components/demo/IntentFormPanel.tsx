@@ -50,6 +50,14 @@ export function IntentFormPanel({
   // Add local state for "allow all" toggle
   const [allowAll, setAllowAll] = useState(form.allowedCategories.length === availableCategories.length && form.allowedCategories.every(c => availableCategories.includes(c)));
 
+  // Sync allowAll with current form state
+  useEffect(() => {
+    const isAll = form.allowedCategories.length > 0
+      && form.allowedCategories.length === availableCategories.length
+      && form.allowedCategories.every(c => availableCategories.includes(c));
+    setAllowAll(isAll);
+  }, [form.allowedCategories, availableCategories]);
+
   // Sync allowedCategories with allowAll
   useEffect(() => {
     if (allowAll) {
@@ -110,8 +118,7 @@ export function IntentFormPanel({
 
   const handleReset = () => {
     onReset();
-    setAllowAll(true);
-    updateField('allowedCategories', availableCategories);
+    setBrandInput('');
   };
 
   return (

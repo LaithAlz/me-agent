@@ -3,6 +3,7 @@ import type {
   BundleResult,
   ExplainResult,
   IntentForm,
+  CartItem,
 } from '@/types';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
@@ -44,12 +45,17 @@ export async function authorizePasskey(): Promise<{ success: boolean; error?: st
   }
 }
 
-export async function generateBundle(payload: IntentForm): Promise<BundleResult> {
+export async function generateBundle(payload: IntentForm & { cartItems?: CartItem[] }): Promise<BundleResult> {
   await delay(1200); // Simulate AI processing
+
+  const cartItems = (payload.cartItems ?? []).map(item => ({
+    id: item.id,
+    qty: item.qty,
+  }));
 
   return apiRequest<BundleResult>('/api/agent/bundle', {
     method: 'POST',
-    body: JSON.stringify({ ...payload, personaId: 'alex' }),
+    body: JSON.stringify({ ...payload, personaId: 'alex', cartItems }),
   });
 }
 

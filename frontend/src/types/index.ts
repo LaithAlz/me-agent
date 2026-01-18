@@ -9,6 +9,7 @@ export interface Product {
   productType: string;
   vendor: string;
   inStock: boolean;
+  stockQuantity: number;
 }
 
 export interface CartItem {
@@ -21,6 +22,7 @@ export interface CartItem {
   productType?: string;
   vendor?: string;
   inStock?: boolean;
+  stockQuantity?: number;
 }
 
 export interface PermissionPolicy {
@@ -38,6 +40,7 @@ export interface BundleItem {
   merchant: string;
   reasonTags: string[];
   qty: number;
+  stockQuantity?: number;
   imageUrl?: string;
 }
 

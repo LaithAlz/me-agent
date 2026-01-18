@@ -122,13 +122,21 @@ export function saveCartItems(items: CartItem[]): void {
 
 export function addCartItem(item: CartItem): CartItem[] {
   const existing = loadCartItems();
+  if (typeof item.stockQuantity === 'number' && item.stockQuantity <= 0) {
+    return existing;
+  }
   const found = existing.find(existingItem => existingItem.id === item.id);
   const updated = found
-    ? existing.map(existingItem =>
-        existingItem.id === item.id
-          ? { ...existingItem, qty: existingItem.qty + item.qty }
-          : existingItem
-      )
+    ? existing.map(existingItem => {
+        if (existingItem.id !== item.id) return existingItem;
+        const maxQty = existingItem.stockQuantity ?? item.stockQuantity;
+        const nextQty = existingItem.qty + item.qty;
+        return {
+          ...existingItem,
+          qty: typeof maxQty === 'number' ? Math.min(nextQty, maxQty) : nextQty,
+          stockQuantity: maxQty ?? existingItem.stockQuantity,
+        };
+      })
     : [...existing, item];
   saveCartItems(updated);
   return updated;
@@ -137,7 +145,13 @@ export function addCartItem(item: CartItem): CartItem[] {
 export function updateCartItemQty(itemId: string, qty: number): CartItem[] {
   const existing = loadCartItems();
   const updated = existing
-    .map(item => (item.id === itemId ? { ...item, qty: Math.max(1, qty) } : item))
+    .map(item => {
+      if (item.id !== itemId) return item;
+      const maxQty = item.stockQuantity;
+      const clamped = typeof maxQty === 'number' ? Math.min(qty, maxQty) : qty;
+      const nextQty = typeof maxQty === 'number' && maxQty <= 0 ? 0 : Math.max(1, clamped);
+      return { ...item, qty: nextQty };
+    })
     .filter(item => item.qty > 0);
   saveCartItems(updated);
   return updated;
