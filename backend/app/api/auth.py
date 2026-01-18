@@ -143,14 +143,16 @@ async def register_verify(request: RegisterVerifyRequest, response: Response):
             key="meagent_user",
             value=user_id,
             httponly=True,
-            samesite="lax",
+            samesite="none",
+            secure=True,
             max_age=86400 * 7,  # 7 days
         )
         response.set_cookie(
             key="meagent_username",
             value=request.username,
             httponly=False,  # Allow JS to read username for display
-            samesite="lax",
+            samesite="none",
+            secure=True,
             max_age=86400 * 7,
         )
         
@@ -360,14 +362,16 @@ async def login_verify(request: LoginVerifyRequest, response: Response):
             key="meagent_user",
             value=user_id,
             httponly=True,
-            samesite="lax",
+            samesite="none",
+            secure=True,
             max_age=86400 * 7,
         )
         response.set_cookie(
             key="meagent_username",
             value=request.username,
             httponly=False,
-            samesite="lax",
+            samesite="none",
+            secure=True,
             max_age=86400 * 7,
         )
         
@@ -432,14 +436,16 @@ async def demo_login(response: Response):
         key="meagent_user",
         value=demo_user_id,
         httponly=True,
-        samesite="lax",
+        samesite="none",
+        secure=True,
         max_age=86400,
     )
     response.set_cookie(
         key="meagent_username",
         value=demo_username,
         httponly=False,
-        samesite="lax",
+        samesite="none",
+        secure=True,
         max_age=86400,
     )
     
