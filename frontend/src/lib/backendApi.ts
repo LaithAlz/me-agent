@@ -3,7 +3,7 @@
  * Connects to the FastAPI backend for authority, policy, audit, and voice features.
  */
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = process.env.VITE_API_BASE_URL;
 
 // ============================================================
 // Types
@@ -95,7 +95,7 @@ async function apiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const response = await fetch(`${API_BASE}${endpoint}`, {
+  const response = await fetch(`${API_BASE}/api${endpoint}`, {
     ...options,
     credentials: 'include', // Include cookies for session
     headers: {
@@ -211,7 +211,7 @@ export async function cloneVoice(audioFile: File): Promise<{ success: boolean; v
   const formData = new FormData();
   formData.append('file', audioFile);
   
-  const response = await fetch(`${API_BASE}/voice/clone`, {
+  const response = await fetch(`${API_BASE}/api/voice/clone`, {
     method: 'POST',
     credentials: 'include',
     body: formData,
@@ -281,7 +281,7 @@ export async function deleteAvatar(): Promise<{ success: boolean }> {
 
 export async function checkBackendHealth(): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE.replace('/api', '')}/health`);
+    const response = await fetch(`${API_BASE}/health`);
     return response.ok;
   } catch {
     return false;
