@@ -49,8 +49,8 @@ MONGO_URI = getattr(settings, "MONGO_URI", None) or os.getenv("MONGO_URI")
 MONGO_DB_NAME = (
     getattr(settings, "MONGO_DB_NAME", None)
     or os.getenv("MONGO_DB_NAME")
-    or getattr(settings, "MONGODB_DB_NAME", None)
-    or os.getenv("MONGODB_DB_NAME")
+    or getattr(settings, "MONGO_DB_NAME", None)
+    or os.getenv("MONGO_DB_NAME")
     or "meagent"
 )
 
