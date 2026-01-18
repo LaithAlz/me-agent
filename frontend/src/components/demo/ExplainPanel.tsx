@@ -11,6 +11,7 @@ interface ExplainPanelProps {
   bundle: BundleResult | any | null
   isLoading: boolean
   onExplain: () => void
+  avatarUrl?: string;
 }
 
 function getBundleItemCount(bundle: any | null): number {
@@ -26,10 +27,10 @@ function getExplanationText(explanation: ExplainResult | string | null): string 
   return null
 }
 
-export function ExplainPanel({ explanation, bundle, isLoading, onExplain }: ExplainPanelProps) {
+export function ExplainPanel({ explanation, bundle, isLoading, onExplain, avatarUrl }: ExplainPanelProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoadingVoice, setIsLoadingVoice] = useState(false)
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const text = useMemo(() => getExplanationText(explanation), [explanation])
@@ -38,27 +39,9 @@ export function ExplainPanel({ explanation, bundle, isLoading, onExplain }: Expl
   const canExplain = itemCount > 0
   const hasAudio = Boolean(text) // show play only when we have text to speak
 
-  // Load avatar on mount
-  useEffect(() => {
-    const loadAvatar = async () => {
-      try {
-        const isConnected = await checkBackendHealth()
-        if (!isConnected) return
-
-        const data = await getAvatar()
-        if (data?.hasAvatar && data?.avatarBase64) {
-          setAvatarUrl(`data:image/jpeg;base64,${data.avatarBase64}`)
-        }
-      } catch (e) {
-        console.error('Failed to load avatar:', e)
-      }
-    }
-
-    loadAvatar()
-  }, [])
-
   // Ensure play state updates if audio ends or component unmounts
   useEffect(() => {
+    console.log('avatarUrl', avatarUrl)
     const a = audioRef.current
     if (!a) return
 
@@ -73,6 +56,10 @@ export function ExplainPanel({ explanation, bundle, isLoading, onExplain }: Expl
       a.removeEventListener('pause', onPause)
     }
   }, [])
+
+  useEffect(() => {
+    console.log('avatarUrl', avatarUrl)
+  }, [avatarUrl])
 
   const handlePlayPause = useCallback(async () => {
     // Pause if currently playing
@@ -183,6 +170,7 @@ export function ExplainPanel({ explanation, bundle, isLoading, onExplain }: Expl
                     className="h-full w-full object-cover"
                     style={{ filter: 'saturate(1.2) contrast(1.1)' }}
                   />
+                  
                 ) : (
                   <span className="text-2xl">🤖</span>
                 )}

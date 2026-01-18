@@ -12,13 +12,16 @@ Design goals:
 - Works with MongoDB when MONGO_URI is set
 - Falls back to in-memory persistence for hackathon demo if Mongo is missing
 - Never leaks Backboard exceptions as raw 500s, converts them to HTTP 502 with JSON details
+- Models are not hardcoded, configured via env or Settings
+- Learns from both rejected items and kept items across sessions
+- Explanation is best-effort: timeouts return cart with a deterministic fallback explanation
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
-import uuid
 from datetime import datetime
 from typing import Optional, Any, Dict, List
 
@@ -28,8 +31,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from backboard import BackboardClient
-from backboard.exceptions import BackboardNotFoundError
-from backboard.exceptions import BackboardAPIError
+from backboard.exceptions import BackboardNotFoundError, BackboardAPIError
 
 from app.core.config import get_settings
 
@@ -40,16 +42,32 @@ from app.core.config import get_settings
 settings = get_settings()
 
 API_KEY = getattr(settings, "BACKBOARD_API_KEY", None) or os.getenv("BACKBOARD_API_KEY")
+
 MONGO_URI = getattr(settings, "MONGO_URI", None) or os.getenv("MONGO_URI")
-MONGO_DB_NAME = getattr(settings, "MONGO_DB_NAME", None) or os.getenv("MONGO_DB_NAME") or "meagent"
+MONGO_DB_NAME = (
+    getattr(settings, "MONGO_DB_NAME", None)
+    or os.getenv("MONGO_DB_NAME")
+    or getattr(settings, "MONGODB_DB_NAME", None)
+    or os.getenv("MONGODB_DB_NAME")
+    or "meagent"
+)
+
+# Backboard LLM routing (dynamic, not hardcoded)
+DECISION_PROVIDER = getattr(settings, "DECISION_PROVIDER", None) or os.getenv("DECISION_PROVIDER") or "openai"
+DECISION_MODEL = getattr(settings, "DECISION_MODEL", None) or os.getenv("DECISION_MODEL") or "gpt-4.1"
+
+EXPLAIN_PROVIDER = getattr(settings, "EXPLAIN_PROVIDER", None) or os.getenv("EXPLAIN_PROVIDER") or "openai"
+EXPLAIN_MODEL = getattr(settings, "EXPLAIN_MODEL", None) or os.getenv("EXPLAIN_MODEL") or "gpt-5-mini"
+
+# Timeout controls
+DECISION_TIMEOUT_S = float(getattr(settings, "DECISION_TIMEOUT_S", None) or os.getenv("BACKBOARD_DECISION_TIMEOUT_S") or 30)
+EXPLAIN_TIMEOUT_S = float(getattr(settings, "EXPLAIN_TIMEOUT_S", None) or os.getenv("BACKBOARD_EXPLAIN_TIMEOUT_S") or 20)
 
 if not API_KEY:
     raise RuntimeError("Missing BACKBOARD_API_KEY")
 
-# Backboard client
 client = BackboardClient(api_key=API_KEY)
 
-# Mongo optional, in-memory fallback for demo reliability
 _mongo_client: Optional[pymongo.MongoClient] = None
 _db = None
 
@@ -101,6 +119,7 @@ class RecommendationRequest(BaseModel):
 class FeedbackRequest(BaseModel):
     user_id: str
     rejected_items: list[str]
+    kept_items: Optional[list[str]] = None  # optional
     reason: str
 
 
@@ -142,11 +161,12 @@ def _db_set_user_memory(user_id: str, memory_payload: dict, backboard_memory_id:
     _memory_store["memory"][user_id] = entry
 
 
-def _db_insert_session(user_id: str, cart: str, explanation: str) -> None:
+def _db_insert_session(user_id: str, cart: str, explanation: str, inventory: list[dict]) -> None:
     record = {
         "user_id": user_id,
         "cart": cart,
         "explanation": explanation,
+        "inventory": inventory,  # snapshot for feedback learning
         "timestamp": datetime.utcnow().isoformat(),
     }
     if _db is not None:
@@ -155,10 +175,20 @@ def _db_insert_session(user_id: str, cart: str, explanation: str) -> None:
     _memory_store["sessions"].append(record)
 
 
-def _db_insert_correction(user_id: str, rejected: list[str], reason: str) -> None:
+def _db_get_latest_session(user_id: str) -> Optional[dict]:
+    if _db is not None:
+        return _db.sessions.find_one({"user_id": user_id}, sort=[("timestamp", pymongo.DESCENDING)])
+    sessions = [s for s in _memory_store["sessions"] if s.get("user_id") == user_id]
+    if not sessions:
+        return None
+    return sorted(sessions, key=lambda x: x.get("timestamp", ""), reverse=True)[0]
+
+
+def _db_insert_correction(user_id: str, rejected: list[str], kept: list[str], reason: str) -> None:
     record = {
         "user_id": user_id,
         "rejected": rejected,
+        "kept": kept,
         "reason": reason,
         "timestamp": datetime.utcnow().isoformat(),
     }
@@ -202,10 +232,6 @@ def _normalize_list(vals: Optional[list[str]]) -> list[str]:
 
 
 def _get_attr(obj: Any, *keys: str) -> Optional[Any]:
-    """
-    Backboard SDK objects sometimes return attribute objects or dict-like objects.
-    This helper reads either style safely.
-    """
     for k in keys:
         if hasattr(obj, k):
             return getattr(obj, k)
@@ -214,13 +240,27 @@ def _get_attr(obj: Any, *keys: str) -> Optional[Any]:
     return None
 
 
+def _raise_backboard_502(stage: str, exc: BackboardAPIError) -> None:
+    raise HTTPException(
+        status_code=502,
+        detail={
+            "message": f"Backboard error during {stage}",
+            "error": str(exc),
+            "backboard_status": getattr(exc, "status_code", None),
+        },
+    )
+
+
 # ============================================================
-# Memory helpers
+# Memory model
 # ============================================================
 DEFAULT_POLICY = {
     "preferred_brands": ["Apple", "Bose", "Logitech"],
+    "preferred_tags": [],
+    "kept_items": {},            # item_name -> count
+    "rejected_items": {},        # item_name -> count
     "price_sensitivity": {"max_cart": 500},
-    "rejection_patterns": ["rgb", "samsung", "flashy"],
+    "rejection_patterns": [],
     "weights": {"ecosystem_fit": 0.4, "design": 0.3, "price": 0.2},
 }
 
@@ -231,9 +271,83 @@ def _default_memory(max_total: float) -> dict:
     return mem
 
 
+def _inc_counts(counter: dict, names: list[str], cap: int = 80) -> dict:
+    counter = dict(counter or {})
+    for n in names:
+        nn = (n or "").strip()
+        if not nn:
+            continue
+        counter[nn] = int(counter.get(nn, 0)) + 1
+    items = sorted(counter.items(), key=lambda kv: kv[1], reverse=True)[:cap]
+    return {k: v for k, v in items}
+
+
+def _index_inventory(inventory: list[dict]) -> Dict[str, dict]:
+    idx: Dict[str, dict] = {}
+    for p in inventory or []:
+        name = (p.get("name") or "").strip()
+        if name:
+            idx[name.lower()] = p
+    return idx
+
+
+def _derive_from_items(
+    memory_payload: dict,
+    kept_items: list[str],
+    rejected_items: list[str],
+    inventory_snapshot: Optional[list[dict]],
+) -> dict:
+    kept_items = [k.strip() for k in (kept_items or []) if k and k.strip()]
+    rejected_items = [r.strip() for r in (rejected_items or []) if r and r.strip()]
+
+    memory_payload["kept_items"] = _inc_counts(memory_payload.get("kept_items", {}), kept_items)
+    memory_payload["rejected_items"] = _inc_counts(memory_payload.get("rejected_items", {}), rejected_items)
+
+    rp = set(_norm(x) for x in (memory_payload.get("rejection_patterns", []) or []) if _norm(x))
+    for r in rejected_items:
+        rp.add(_norm(r))
+    memory_payload["rejection_patterns"] = sorted(rp)
+
+    if inventory_snapshot:
+        inv = _index_inventory(inventory_snapshot)
+
+        brand_counts: Dict[str, int] = {}
+        tag_counts: Dict[str, int] = {}
+
+        for k in kept_items:
+            p = inv.get(k.lower())
+            if not p:
+                continue
+
+            b = (p.get("brand") or "").strip()
+            if b:
+                brand_counts[b] = brand_counts.get(b, 0) + 1
+
+            for t in (p.get("tags") or []):
+                nt = _norm(t)
+                if nt:
+                    tag_counts[nt] = tag_counts.get(nt, 0) + 1
+
+        if brand_counts:
+            existing = set(memory_payload.get("preferred_brands", []) or [])
+            top_brands = [b for b, _ in sorted(brand_counts.items(), key=lambda kv: kv[1], reverse=True)[:6]]
+            for b in top_brands:
+                existing.add(b)
+            memory_payload["preferred_brands"] = sorted(existing)
+
+        if tag_counts:
+            existing_tags = set(memory_payload.get("preferred_tags", []) or [])
+            top_tags = [t for t, _ in sorted(tag_counts.items(), key=lambda kv: kv[1], reverse=True)[:10]]
+            for t in top_tags:
+                existing_tags.add(t)
+            memory_payload["preferred_tags"] = sorted(existing_tags)
+
+    return memory_payload
+
+
 def _apply_frontend_preferences_to_memory(memory_payload: dict, req: RecommendationRequest, budget: float) -> dict:
     if req.brandPreferences:
-        existing = set(memory_payload.get("preferred_brands", []))
+        existing = set(memory_payload.get("preferred_brands", []) or [])
         for b in req.brandPreferences:
             if b and b.strip():
                 existing.add(b.strip())
@@ -263,12 +377,6 @@ def _apply_frontend_preferences_to_memory(memory_payload: dict, req: Recommendat
 
 
 def _filter_inventory_by_allowed_categories(products: list[Product], allowed_categories_norm: list[str]) -> list[Product]:
-    """
-    Deterministic enforcement without schema changes:
-    - Treat allowedCategories as tags
-    - Keep only products whose tags intersect allowedCategories
-    - If none match, fall back to original inventory
-    """
     if not allowed_categories_norm:
         return products
 
@@ -282,15 +390,16 @@ def _filter_inventory_by_allowed_categories(products: list[Product], allowed_cat
     return filtered if filtered else products
 
 
-def _raise_backboard_502(stage: str, exc: BackboardAPIError) -> None:
-    raise HTTPException(
-        status_code=502,
-        detail={
-            "message": f"Backboard error during {stage}",
-            "error": str(exc),
-            "backboard_status": getattr(exc, "status_code", None),
-        },
-    )
+# ============================================================
+# Backboard helpers
+# ============================================================
+async def _add_message_with_timeout(*, stage: str, timeout_s: float, **kwargs):
+    try:
+        return await asyncio.wait_for(client.add_message(**kwargs), timeout=timeout_s)
+    except asyncio.TimeoutError:
+        return None
+    except BackboardAPIError as e:
+        _raise_backboard_502(stage, e)
 
 
 async def _ensure_backboard_memory(assistant_id: str, user_id: str, memory_payload: dict) -> str:
@@ -325,7 +434,7 @@ async def _ensure_backboard_memory(assistant_id: str, user_id: str, memory_paylo
 
     new_id = _get_attr(created, "memory_id", "id")
     if not new_id:
-        raise HTTPException(status_code=502, detail={"message": "Backboard add_memory returned no memory_id", "raw": created})
+        raise HTTPException(status_code=502, detail={"message": "Backboard add_memory returned no memory_id", "raw": str(created)})
 
     _db_set_user_memory(user_id, memory_payload, backboard_memory_id=str(new_id))
     return str(new_id)
@@ -336,6 +445,55 @@ def _get_assistant_id() -> str:
     if not assistant_id:
         raise HTTPException(status_code=500, detail="Assistant not initialized")
     return assistant_id
+
+
+def _fallback_explanation(cart_json: str, intent: str, budget: float, avoid_norm: list[str]) -> str:
+    try:
+        cart = json.loads(cart_json)
+    except Exception:
+        cart = {}
+
+    items = cart.get("items") if isinstance(cart, dict) else None
+    if not isinstance(items, list):
+        items = []
+
+    picked: list[str] = []
+    for it in items[:8]:
+        if isinstance(it, dict):
+            name = (it.get("name") or it.get("title") or "Item").strip()
+            brand = (it.get("brand") or it.get("merchant") or "Unknown").strip()
+            picked.append(f"{brand} {name}".strip())
+
+    total = cart.get("total") if isinstance(cart, dict) else None
+    try:
+        total_num = float(total) if total is not None else None
+    except Exception:
+        total_num = None
+
+    total_str = f"${round(total_num, 2)}" if isinstance(total_num, (int, float)) else "unknown"
+    picked_str = "; ".join(picked) if picked else "No items selected"
+
+    constraints_bullets = [
+        f"- Under budget ({total_str} / ${int(budget)})" if isinstance(budget, (int, float)) else "- Budget respected",
+        "- Matched allowed categories",
+        "- Avoided rejected patterns",
+    ][:3]
+
+    avoid_samples = [a for a in avoid_norm if a][:4]
+    avoided_bullets = [f"- {a}: previously avoided" for a in avoid_samples] or ["- None specified"]
+
+    return (
+        "Summary\n"
+        f"Picked: {picked_str}. Total: {total_str}.\n\n"
+        "Constraints followed\n"
+        + "\n".join(constraints_bullets)
+        + "\n\n"
+        "Avoided\n"
+        + "\n".join(avoided_bullets)
+        + "\n\n"
+        "Preference signal\n"
+        "You tend to keep trusted brands and avoid flashy or RGB items."
+    )
 
 
 # ============================================================
@@ -356,8 +514,9 @@ async def startup() -> None:
             description=(
                 "You are a decision-making shopping agent.\n"
                 "Prioritize ecosystem fit, minimalism, ergonomic value.\n"
-                "Reject flashy designs, unknown brands, anything previously rejected.\n"
-                "After selecting a cart, explain the reasoning."
+                "Avoid products the user rejected previously.\n"
+                "Prefer brands,tags,item patterns the user kept previously.\n"
+                "After selecting a cart, explain briefly what was picked and avoided."
             ),
         )
     except BackboardAPIError as e:
@@ -365,7 +524,7 @@ async def startup() -> None:
 
     assistant_id = _get_attr(assistant, "assistant_id", "id")
     if not assistant_id:
-        raise HTTPException(status_code=502, detail={"message": "Backboard create_assistant returned no assistant_id", "raw": assistant})
+        raise HTTPException(status_code=502, detail={"message": "Backboard create_assistant returned no assistant_id", "raw": str(assistant)})
 
     _db_set_meta("assistant_id", str(assistant_id))
 
@@ -375,27 +534,39 @@ async def startup() -> None:
 # ============================================================
 @router.get("/health")
 async def health():
-    return {"ok": True, "mongo": bool(_db is not None), "dbName": MONGO_DB_NAME}
+    return {
+        "ok": True,
+        "mongo": bool(_db is not None),
+        "dbName": MONGO_DB_NAME,
+        "decision": {"provider": DECISION_PROVIDER, "model": DECISION_MODEL, "timeout_s": DECISION_TIMEOUT_S},
+        "explain": {"provider": EXPLAIN_PROVIDER, "model": EXPLAIN_MODEL, "timeout_s": EXPLAIN_TIMEOUT_S},
+    }
 
 
 @router.post("/recommend")
 async def recommend(req: RecommendationRequest):
-    assistant_id = _get_assistant_id()
+    # Self-heal init during dev/hotreload
+    try:
+        assistant_id = _get_assistant_id()
+    except HTTPException as e:
+        if e.status_code == 500 and str(e.detail) == "Assistant not initialized":
+            await startup()
+            assistant_id = _get_assistant_id()
+        else:
+            raise
 
     user_id = _normalize_user_id(req)
     budget = _normalize_budget(req)
 
-    # Load memory or default
     mem_doc = _db_get_user_memory(user_id) or {}
     memory_payload = mem_doc.get("memory") or _default_memory(max_total=budget)
 
     # Apply frontend signals (persistent)
     memory_payload = _apply_frontend_preferences_to_memory(memory_payload, req, budget)
 
-    # Sync to Backboard memory
+    # Sync memory to Backboard
     await _ensure_backboard_memory(assistant_id, user_id, memory_payload)
 
-    # Agent disabled => deterministic response
     if req.agentEnabled is False:
         empty = {"items": [], "total": 0.0, "notes": "Agent disabled by user."}
         return JSONResponse(
@@ -405,24 +576,23 @@ async def recommend(req: RecommendationRequest):
             }
         )
 
-    # Intent text
     intent_text = (req.shoppingIntent or "").strip()
     context_text = (req.context or "").strip()
     intent = intent_text or context_text or "personal use"
 
-    # Normalize session inputs
     allowed_norm = _normalize_list(req.allowedCategories)
     preferred_norm = _normalize_list(req.brandPreferences)
 
-    # Session override: preferred brands win over avoid for this run
     raw_avoid = memory_payload.get("rejection_patterns", []) or []
     avoid_norm = [_norm(x) for x in raw_avoid if _norm(x)]
     avoid_norm = [x for x in avoid_norm if x not in set(preferred_norm)]
 
-    # Deterministic category filtering using tags
     inventory_filtered = _filter_inventory_by_allowed_categories(req.products, allowed_norm)
 
-    # Create Backboard thread
+    preferred_tags = memory_payload.get("preferred_tags", []) or []
+    kept_item_counts = memory_payload.get("kept_items", {}) or {}
+    top_kept = [k for k, _ in sorted(kept_item_counts.items(), key=lambda kv: kv[1], reverse=True)[:8]]
+
     try:
         thread = await client.create_thread(assistant_id)
     except BackboardAPIError as e:
@@ -430,7 +600,7 @@ async def recommend(req: RecommendationRequest):
 
     thread_id = _get_attr(thread, "thread_id", "id")
     if not thread_id:
-        raise HTTPException(status_code=502, detail={"message": "Backboard create_thread returned no thread_id", "raw": thread})
+        raise HTTPException(status_code=502, detail={"message": "Backboard create_thread returned no thread_id", "raw": str(thread)})
 
     decision_prompt = {
         "task": "Select a cart from inventory that best matches intent and preferences while respecting constraints.",
@@ -441,11 +611,19 @@ async def recommend(req: RecommendationRequest):
             "brand_preferences": req.brandPreferences or [],
             "price_sensitivity": req.priceSensitivity,
             "avoid": avoid_norm,
+            "prefer": {
+                "brands": memory_payload.get("preferred_brands", []) or [],
+                "tags": preferred_tags,
+                "items": top_kept,
+            },
             "hard_rules": [
                 "Return ONLY valid JSON. No markdown, no extra text.",
                 "If allowed_categories is non-empty, ONLY choose items whose tags include at least one allowed category token.",
                 "If a brand appears in both brand_preferences and avoid, brand_preferences wins for this run.",
-                "Reject unknown brands, RGB, flashy items, anything in avoid.",
+                "Reject anything in avoid.",
+                "Prefer items whose brand is in prefer.brands when possible.",
+                "Prefer items whose tags overlap prefer.tags when possible.",
+                "If any prefer.items appear in inventory, include them unless they violate avoid or budget.",
             ],
             "notes_rule": "notes should be 1-2 sentences max",
             "output_format": {
@@ -460,19 +638,21 @@ async def recommend(req: RecommendationRequest):
         "inventory": [p.dict() for p in inventory_filtered],
     }
 
-    try:
-        decision = await client.add_message(
-            thread_id=str(thread_id),
-            content=json.dumps(decision_prompt),
-            llm_provider="openai",
-            model_name="gpt-4.1",
-            memory="Auto",
-            stream=False,
-        )
-    except BackboardAPIError as e:
-        _raise_backboard_502("add_message decision", e)
+    decision_obj = await _add_message_with_timeout(
+        stage="add_message decision",
+        timeout_s=DECISION_TIMEOUT_S,
+        thread_id=str(thread_id),
+        content=json.dumps(decision_prompt),
+        llm_provider=DECISION_PROVIDER,
+        model_name=DECISION_MODEL,
+        memory="Auto",
+        stream=False,
+    )
 
-    decision_content = _get_attr(decision, "content") or ""
+    if decision_obj is None:
+        raise HTTPException(status_code=502, detail={"message": "Backboard decision timed out"})
+
+    decision_content = _get_attr(decision_obj, "content") or ""
     if not isinstance(decision_content, str):
         decision_content = str(decision_content)
 
@@ -488,53 +668,121 @@ async def recommend(req: RecommendationRequest):
         },
         "guidelines": [
             "Do not mention internal memory IDs or labels like 'Memory 1'.",
-            "If intent conflicts with allowed categories, reinterpret intent within allowed categories and state that assumption briefly.",
+            "If intent conflicts with allowed categories, reinterpret intent within allowed categories in ONE short clause.",
             "If a brand appears in both brand_preferences and avoid, treat brand_preferences as the session override for this run.",
-            "Structure: summary, constraints followed, why other items were rejected, how it matches preferences.",
+            "Hard cap: 140-220 words total.",
+            "Use EXACTLY 4 sections with these headings: Summary, Constraints followed, Avoided, Preference signal.",
+            "Each section must be 1-2 lines max.",
+            "Summary: 1 sentence listing items picked plus total. No extra rationale.",
+            "Constraints followed: max 3 bullets, each <= 8 words.",
+            "Avoided: max 4 bullets, each must name a specific inventory item and give a <= 8 word reason.",
+            "Preference signal: 1 sentence stating the single strongest learned preference from history that drove choices. Do not say 'based on memory' or similar.",
+            "Do NOT add suggestions, alternatives, or next steps.",
+            "Do NOT restate the full intent or the full constraints list.",
         ],
-        "cart_reference": "Use the latest decision in this thread as the chosen cart.",
+        "cart_reference": "Use the latest decision in this thread as the chosen cart and reference only items from the provided inventory when listing avoided examples.",
     }
 
-    try:
-        explanation = await client.add_message(
+    explanation_obj = await _add_message_with_timeout(
+        stage="add_message explanation",
+        timeout_s=EXPLAIN_TIMEOUT_S,
+        thread_id=str(thread_id),
+        content=json.dumps(explain_prompt),
+        llm_provider=EXPLAIN_PROVIDER,
+        model_name=EXPLAIN_MODEL,
+        memory="Auto",
+        stream=False,
+    )
+
+    # One retry
+    if explanation_obj is None:
+        explanation_obj = await _add_message_with_timeout(
+            stage="add_message explanation retry",
+            timeout_s=EXPLAIN_TIMEOUT_S,
             thread_id=str(thread_id),
             content=json.dumps(explain_prompt),
-            llm_provider="openai",
-            model_name="gpt-5-mini",
+            llm_provider=EXPLAIN_PROVIDER,
+            model_name=EXPLAIN_MODEL,
             memory="Auto",
             stream=False,
         )
-    except BackboardAPIError as e:
-        _raise_backboard_502("add_message explanation", e)
 
-    explanation_content = _get_attr(explanation, "content") or ""
-    if not isinstance(explanation_content, str):
-        explanation_content = str(explanation_content)
+    if explanation_obj is None:
+        explanation_content = _fallback_explanation(
+            cart_json=decision_content,
+            intent=intent,
+            budget=budget,
+            avoid_norm=avoid_norm,
+        )
+    else:
+        explanation_content = _get_attr(explanation_obj, "content") or ""
+        if not isinstance(explanation_content, str):
+            explanation_content = str(explanation_content)
 
-    _db_insert_session(user_id=user_id, cart=decision_content, explanation=explanation_content)
+    inventory_snapshot = [p.dict() for p in inventory_filtered]
+    _db_insert_session(user_id=user_id, cart=decision_content, explanation=explanation_content, inventory=inventory_snapshot)
 
     return JSONResponse(content={"cart": decision_content, "explanation": explanation_content})
 
 
 @router.post("/feedback")
 async def record_feedback(req: FeedbackRequest):
-    _db_insert_correction(user_id=req.user_id, rejected=req.rejected_items, reason=req.reason)
-
     mem_doc = _db_get_user_memory(req.user_id) or {}
     memory_payload = mem_doc.get("memory") or _default_memory(max_total=500)
 
-    updated = sorted(set((memory_payload.get("rejection_patterns", []) or []) + req.rejected_items))
-    memory_payload["rejection_patterns"] = updated
+    rejected = [r.strip() for r in (req.rejected_items or []) if r and r.strip()]
+    kept = [k.strip() for k in (req.kept_items or []) if k and k.strip()]
 
-    # persist locally
-    existing_backboard_id = mem_doc.get("backboard_memory_id")
+    # If kept_items not provided, infer from latest session cart
+    if not kept:
+        latest = _db_get_latest_session(req.user_id) or {}
+        cart_str = latest.get("cart") or ""
+        try:
+            cart_obj = json.loads(cart_str) if isinstance(cart_str, str) else None
+        except Exception:
+            cart_obj = None
+
+        inferred: list[str] = []
+        if isinstance(cart_obj, dict):
+            items = cart_obj.get("items") or []
+            if isinstance(items, list):
+                for it in items:
+                    if isinstance(it, dict):
+                        n = (it.get("name") or it.get("title") or "").strip()
+                        if n:
+                            inferred.append(n)
+
+        rejected_norm = set(_norm(r) for r in rejected if _norm(r))
+        kept = [n for n in inferred if _norm(n) not in rejected_norm]
+
+    latest_session = _db_get_latest_session(req.user_id)
+    inventory_snapshot = (latest_session or {}).get("inventory") if isinstance(latest_session, dict) else None
+
+    memory_payload = _derive_from_items(
+        memory_payload=memory_payload,
+        kept_items=kept,
+        rejected_items=rejected,
+        inventory_snapshot=inventory_snapshot if isinstance(inventory_snapshot, list) else None,
+    )
+
+    existing_backboard_id = (mem_doc or {}).get("backboard_memory_id")
     _db_set_user_memory(req.user_id, memory_payload, backboard_memory_id=existing_backboard_id)
 
-    # sync to Backboard
-    assistant_id = _get_assistant_id()
+    _db_insert_correction(user_id=req.user_id, rejected=rejected, kept=kept, reason=req.reason)
+
+    # Sync to Backboard
+    try:
+        assistant_id = _get_assistant_id()
+    except HTTPException as e:
+        if e.status_code == 500 and str(e.detail) == "Assistant not initialized":
+            await startup()
+            assistant_id = _get_assistant_id()
+        else:
+            raise
+
     await _ensure_backboard_memory(assistant_id, req.user_id, memory_payload)
 
-    return {"status": "updated"}
+    return {"status": "updated", "learned": {"kept": kept[:10], "rejected": rejected[:10]}}
 
 
 @router.post("/debug/echo")
