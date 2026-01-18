@@ -26,15 +26,22 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="py-20 md:py-32">
-        <div className="container mx-auto px-4 text-center">
+      <section className="pt-0 pb-20 md:pb-32 relative">
+        <div>
+          <img
+            src="/favicon.ico"
+            alt=""
+            className="mx-auto mb-10 animate-pulse [animation-duration:4s] opacity-80"
+          />
+        </div>
+        <div className="container mx-auto px-4 text-center">          
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-verified/10 text-verified text-sm font-medium mb-6">
             <Shield className="h-4 w-4" />
             Secure by Design
           </div>
           
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6 max-w-4xl mx-auto">
-            A Secure Identity-Bound
+            A Secure, Identity-Bound
             <br />
             <span className="text-primary">AI Shopping Agent</span>
           </h1>
@@ -134,7 +141,7 @@ export default function LandingPage() {
               <span className="font-semibold">Me-Agent</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Secure Identity-Bound AI Shopping Agent
+              Secure, Identity-Bound AI Shopping Agent
             </p>
           </div>
         </div>
