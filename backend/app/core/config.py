@@ -55,14 +55,22 @@ class Settings(BaseSettings):
     # CORS
     # Add your deployed frontend domains here
     CORS_ORIGINS: list[str] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:8080",
-        "http://127.0.0.1:8080",
-        "https://me-agent.tech",
-        "https://www.me-agent.tech",
-        "https://me-agent-gbvn1a6l4-laithalzs-projects.vercel.app",
-    ]
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:8080",
+  "http://127.0.0.1:8080",
+
+  # your custom domain
+  "https://me-agent.tech",
+  "https://www.me-agent.tech",
+
+  # your current Vercel preview domain (the one in the error)
+  "https://me-agent-git-main-laithalzs-projects.vercel.app",
+
+  # strongly recommended for future preview URLs
+  "https://me-agent.vercel.app",
+   ]
+
 
 
 @lru_cache()
