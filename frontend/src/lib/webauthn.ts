@@ -417,10 +417,6 @@ export async function authenticatePasskey(username?: string): Promise<AuthResult
 /**
  * Authorize a specific action with passkey consent
  * This is used for the Me-Agent flow where each action requires biometric confirmation
- * 
- * For demo purposes, we use a simplified flow:
- * 1. If user is already registered with a passkey, trigger real WebAuthn
- * 2. Otherwise, simulate the biometric prompt for demo
  */
 export async function authorizeActionWithPasskey(action: string): Promise<AuthResult> {
   try {
@@ -428,13 +424,13 @@ export async function authorizeActionWithPasskey(action: string): Promise<AuthRe
     const hasPlatformAuth = await isPlatformAuthenticatorAvailable();
     
     if (!hasPlatformAuth) {
-      console.log('Platform authenticator not available, using demo mode');
-      // Fallback for devices without biometric support
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      return { success: true, userId: 'demo-user-1' };
+      console.log('Platform authenticator not available');
+      return { success: false, error: 'Biometric authentication not available on this device' };
     }
 
-    // First, check if we have a session (user already registered)
+    console.log('Platform authenticator available, checking for registered passkey...');
+
+    // Check if we have a session (user already registered)
     const sessionResponse = await fetch(`${API_BASE}/auth/session`, {
       credentials: 'include',
     });
@@ -442,17 +438,16 @@ export async function authorizeActionWithPasskey(action: string): Promise<AuthRe
     if (sessionResponse.ok) {
       const session = await sessionResponse.json();
       if (session.authenticated && session.username) {
-        // User is registered, try real WebAuthn authentication
+        // User is registered, trigger real WebAuthn authentication
+        console.log('Found registered user, triggering Windows Hello/biometric prompt...');
         const result = await authenticatePasskey(session.username);
-        // Return the actual result (success or failure)
         return result;
       }
     }
     
-    // No registered user - use demo simulation
-    console.log('No registered passkey, using demo biometric simulation');
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    return { success: true, userId: 'demo-user-1' };
+    // No registered user - must register first
+    console.log('No registered passkey found. User must register first.');
+    return { success: false, error: 'No passkey registered. Please register in Settings first.' };
     
   } catch (error) {
     console.error('Action authorization error:', error);
@@ -465,8 +460,11 @@ export async function authorizeActionWithPasskey(action: string): Promise<AuthRe
       if (error.name === 'SecurityError') {
         return { success: false, error: 'Security error - check that you\'re on a secure connection' };
       }
+      if (error.name === 'TimeoutError') {
+        return { success: false, error: 'Biometric verification timed out' };
+      }
     }
     
-    return { success: false, error: 'Failed to authorize action' };
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to authorize action' };
   }
 }
