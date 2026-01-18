@@ -164,8 +164,8 @@ export default function LandingPage() {
                 detail="Policy snapshots captured at decision time"
               />
               <TrustItem 
-                text="Budget limits enforced server-side" 
-                detail="Cannot be bypassed by client-side code"
+                text="Budget limits enforced server-side in CAD" 
+                detail="Cannot be bypassed by client-side code, all spending tracked in Canadian dollars"
               />
               <TrustItem 
                 text="Category restrictions prevent scope creep" 

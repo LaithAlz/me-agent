@@ -421,16 +421,19 @@ export function AuthorityPanel({ className }: AuthorityPanelProps) {
                 {/* Max Spend */}
                 <div className="space-y-2">
                   <Label htmlFor="max-spend" className="text-sm">
-                    Maximum Spend: ${policy.maxSpend}
+                    Maximum Spend (CAD): ${policy.maxSpend}
                   </Label>
-                  <Input
-                    id="max-spend"
-                    type="number"
-                    min={0}
-                    max={10000}
-                    value={policy.maxSpend}
-                    onChange={(e) => handlePolicyChange({ maxSpend: Number(e.target.value) })}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="max-spend"
+                      type="number"
+                      min={0}
+                      max={10000}
+                      value={policy.maxSpend}
+                      onChange={(e) => handlePolicyChange({ maxSpend: Number(e.target.value) })}
+                    />
+                    <span className="text-muted-foreground text-sm font-medium">CAD</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -588,7 +591,7 @@ export function AuthorityPanel({ className }: AuthorityPanelProps) {
                   <strong>Agent:</strong> {policy.agentEnabled ? 'Enabled' : 'Disabled'}
                 </p>
                 <p>
-                  <strong>Budget:</strong> ${policy.maxSpend}
+                  <strong>Budget:</strong> ${policy.maxSpend} CAD
                 </p>
                 <p>
                   <strong>Categories:</strong> {policy.allowedCategories.join(', ')}

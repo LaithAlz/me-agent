@@ -144,9 +144,10 @@ async def get_credential_by_id(credential_id: str) -> Optional[dict]:
 # ============================================================
 # Policy Storage
 # ============================================================
+# Default policy for users with budget limits in CAD
 
 DEFAULT_POLICY = {
-    "maxSpend": 150,
+    "maxSpend": 150,  # CAD - Default spending limit in Canadian dollars
     "allowedCategories": ["office", "electronics"],
     "agentEnabled": True,
     "requireConfirm": True,

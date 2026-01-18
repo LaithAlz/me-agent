@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     DEBUG: bool = True
     SECRET_KEY: str = "dev-secret-key-change-in-production"
     
+    # Currency
+    DEFAULT_CURRENCY: str = "CAD"
+    
     # MongoDB
     MONGODB_URI: Optional[str] = None
     MONGODB_DB_NAME: str = "meagent"

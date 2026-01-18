@@ -137,7 +137,7 @@ export function IntentFormPanel({
         <div className="space-y-2">
           <Label htmlFor="budget">
             Maximum Spend
-            <span className="text-muted-foreground font-normal ml-2">(USD)</span>
+            <span className="text-muted-foreground font-normal ml-2">(CAD)</span>
             {isSavingPolicy && <Loader2 className="h-3 w-3 animate-spin inline ml-2" />}
           </Label>
           {isLoadingPolicy ? (
@@ -157,6 +157,7 @@ export function IntentFormPanel({
                 onChange={(e) => handlePolicyChange({ maxSpend: Number(e.target.value) || 0 })}
                 className="w-32"
               />
+              <span className="text-muted-foreground font-medium">CAD</span>
             </div>
           )}
         </div>

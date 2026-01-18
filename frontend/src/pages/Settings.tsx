@@ -65,7 +65,7 @@ export default function SettingsPage() {
           <CardContent className="space-y-6">
             {/* Max Spend */}
             <div className="space-y-2">
-              <Label htmlFor="maxSpend">Maximum Spend (USD)</Label>
+              <Label htmlFor="maxSpend">Maximum Spend (CAD)</Label>
               <div className="flex items-center gap-2">
                 <span className="text-lg font-semibold">$</span>
                 <Input
@@ -76,6 +76,7 @@ export default function SettingsPage() {
                   onChange={(e) => updatePolicy('maxSpend', Math.max(0, Number(e.target.value)))}
                   className="w-32"
                 />
+                <span className="text-muted-foreground">CAD</span>
               </div>
               <p className="text-xs text-muted-foreground">
                 Agent cannot recommend items exceeding this total

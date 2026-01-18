@@ -88,16 +88,20 @@ export function BundleResultPanel({
             </span>
           </div>
           <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Budget limit</span>
+            <span className="font-semibold">${maxSpend.toFixed(2)} CAD</span>
+          </div>
+          <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Budget remaining</span>
             <span className={isOverLimit ? 'text-destructive font-semibold' : isNearLimit ? 'text-warning font-semibold' : ''}>
-              ${remaining.toFixed(2)}
+              ${remaining.toFixed(2)} CAD
             </span>
           </div>
           
           {isOverLimit && (
             <div className="flex items-center gap-2 p-2 rounded bg-destructive/10 text-destructive text-sm">
               <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span>Bundle exceeds budget. Remove items or increase limit.</span>
+              <span>Bundle exceeds budget by ${Math.abs(remaining).toFixed(2)} CAD. Remove items or increase limit.</span>
             </div>
           )}
           

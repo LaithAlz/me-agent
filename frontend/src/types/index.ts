@@ -1,7 +1,7 @@
 // Me-Agent Type Definitions
 
 export interface PermissionPolicy {
-  maxSpend: number;
+  maxSpend: number; // in CAD
   allowedCategories: string[];
   agentEnabled: boolean;
   merchantId?: string;
@@ -11,7 +11,7 @@ export interface PermissionPolicy {
 export interface BundleItem {
   id: string;
   title: string;
-  price: number;
+  price: number; // in CAD
   category: string;
   merchant: string;
   reasonTags: string[];
@@ -21,8 +21,8 @@ export interface BundleItem {
 
 export interface BundleResult {
   items: BundleItem[];
-  subtotal: number;
-  currency: string;
+  subtotal: number; // in CAD
+  currency: 'CAD';
 }
 
 export interface AuditEvent {
