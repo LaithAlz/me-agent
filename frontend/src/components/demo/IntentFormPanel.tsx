@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { PermissionChip } from '@/components/shared/PermissionChip';
 import { Shield, Sparkles, RotateCcw, X, Plus, AlertCircle, Loader2 } from 'lucide-react';
 import type { IntentForm, Product } from '@/types';
+import { DEFAULT_INTENT_FORM, DEFAULT_PERMISSION_POLICY } from '@/types';
 import { getPolicy, updatePolicy, type AgentPolicy } from '@/lib/backendApi';
 
 interface IntentFormProps {
@@ -180,7 +181,35 @@ export function IntentFormPanel({
 
   const handleReset = () => {
     onReset();
+    const defaultCategories = availableCategories.length > 0 ? availableCategories : DEFAULT_PERMISSION_POLICY.allowedCategories;
+    const nextPolicy = {
+      ...DEFAULT_PERMISSION_POLICY,
+      allowedCategories: defaultCategories,
+    };
+
+    onChange({
+      ...DEFAULT_INTENT_FORM,
+      maxSpend: nextPolicy.maxSpend,
+      allowedCategories: nextPolicy.allowedCategories,
+      agentEnabled: nextPolicy.agentEnabled,
+    });
+
+    setPolicy(nextPolicy);
+    setAllowAll(true);
     setBrandInput('');
+
+    setIsSavingPolicy(true);
+    updatePolicy({
+      maxSpend: nextPolicy.maxSpend,
+      allowedCategories: nextPolicy.allowedCategories,
+      agentEnabled: nextPolicy.agentEnabled,
+    })
+      .catch((e) => {
+        console.error('Failed to reset policy:', e);
+      })
+      .finally(() => {
+        setIsSavingPolicy(false);
+      });
   };
 
   return (

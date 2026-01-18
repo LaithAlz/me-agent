@@ -401,15 +401,10 @@ export default function DemoPage() {
     setIsExplaining(true);
 
     try {
-      const lines = bundle.items
-        .map((item) => {
-          const tags = item.reasonTags?.length ? ` (${item.reasonTags.join(', ')})` : '';
-          return `• ${item.title}${tags}`;
-        })
-        .join('\n');
-
-      const text = `Based on your intent, Me-Agent selected ${bundle.items.length} item(s) within your CAD $${intentForm.maxSpend} budget:\n${lines}`;
-      const result = await explainBundle({ text });
+      const result = await explainBundle({
+        intent: intentForm.shoppingIntent || 'general shopping',
+        bundle,
+      });
       setExplanation(result);
       addEvent('EXPLANATION_GENERATED', 'Agent explanation displayed', {}, { hasAudio: false });
     } finally {

@@ -11,7 +11,7 @@ import {
   isWebAuthnSupported,
 } from './webauthn'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
 // Simulated delay for realistic UX
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -298,9 +298,23 @@ export async function sendFeedback(payload: FeedbackRequest): Promise<FeedbackRe
 // Your backend already returns explanation on /recommend
 // Keep this for compatibility with ExplainPanel expecting ExplainResult
 // -------------------------------
-export async function explainBundle(payload: { text: string }): Promise<ExplainResult> {
+export async function explainBundle(payload: { intent: string; bundle: BundleResult }): Promise<ExplainResult> {
   await delay(100)
-  return { text: payload.text } as ExplainResult
+  try {
+    return apiRequest<ExplainResult>('/api/agent/explain', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  } catch {
+    const lines = payload.bundle.items
+      .map((item) => {
+        const tags = item.reasonTags?.length ? ` (${item.reasonTags.join(', ')})` : ''
+        return `• ${item.title}${tags}`
+      })
+      .join('\n')
+    const text = `Based on your intent, Me-Agent selected ${payload.bundle.items.length} item(s):\n${lines}`
+    return { text }
+  }
 }
 
 // -------------------------------

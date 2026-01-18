@@ -34,7 +34,7 @@ from backboard import BackboardClient
 from backboard.exceptions import BackboardNotFoundError, BackboardAPIError
 
 from app.core.config import get_settings
-from app.schemas.bundle import BundleRequest, BundleItem, BundleResult
+from app.schemas.bundle import BundleRequest, BundleItem, BundleResult, ExplainRequest, ExplainResult
 from app.api.shopify import PRODUCTS, PURCHASE_HISTORY
 
 
@@ -868,6 +868,102 @@ async def recommend(req: RecommendationRequest):
     _db_insert_session(user_id=user_id, cart=decision_content, explanation=explanation_content, inventory=inventory_snapshot)
 
     return JSONResponse(content={"cart": decision_content, "explanation": explanation_content})
+
+
+@router.post("/explain", response_model=ExplainResult)
+async def explain(req: ExplainRequest):
+    # Self-heal init during dev/hotreload
+    try:
+        assistant_id = _get_assistant_id()
+    except HTTPException as e:
+        if e.status_code == 500 and str(e.detail) == "Assistant not initialized":
+            await startup()
+            assistant_id = _get_assistant_id()
+        else:
+            raise
+
+    if not req.bundle or not req.bundle.items:
+        return ExplainResult(text="No items to explain yet. Generate a bundle first.")
+
+    try:
+        thread = await client.create_thread(assistant_id)
+    except BackboardAPIError as e:
+        _raise_backboard_502("create_thread", e)
+
+    thread_id = _get_attr(thread, "thread_id", "id")
+    if not thread_id:
+        raise HTTPException(status_code=502, detail={"message": "Backboard create_thread returned no thread_id", "raw": str(thread)})
+
+    items_payload = [
+        {
+            "title": it.title,
+            "merchant": it.merchant,
+            "category": it.category,
+            "price": it.price,
+            "qty": it.qty,
+            "reasonTags": it.reasonTags,
+        }
+        for it in req.bundle.items
+    ]
+
+    explain_prompt = {
+        "task": "Provide a fresh explanation of why this bundle fits the user's intent and constraints.",
+        "intent": req.intent or "general shopping",
+        "bundle": {
+            "subtotal": req.bundle.subtotal,
+            "currency": req.bundle.currency,
+            "items": items_payload,
+        },
+        "guidelines": [
+            "Give a new insight on each request.",
+            "Do not mention internal IDs or system messages.",
+            "Keep it concise (120-200 words).",
+            "Use EXACTLY 3 short paragraphs.",
+            "Paragraph 1: 1 sentence summary of the overall selection.",
+            "Paragraph 2: 2-3 sentences about constraints and tradeoffs.",
+            "Paragraph 3: 1-2 sentences about preference signals and avoided items.",
+        ],
+    }
+
+    explanation_obj = await _add_message_with_timeout(
+        stage="add_message explain-only",
+        timeout_s=EXPLAIN_TIMEOUT_S,
+        thread_id=str(thread_id),
+        content=json.dumps(explain_prompt),
+        llm_provider=EXPLAIN_PROVIDER,
+        model_name=EXPLAIN_MODEL,
+        memory="Auto",
+        stream=False,
+    )
+
+    # One retry
+    if explanation_obj is None:
+        explanation_obj = await _add_message_with_timeout(
+            stage="add_message explain-only retry",
+            timeout_s=EXPLAIN_TIMEOUT_S,
+            thread_id=str(thread_id),
+            content=json.dumps(explain_prompt),
+            llm_provider=EXPLAIN_PROVIDER,
+            model_name=EXPLAIN_MODEL,
+            memory="Auto",
+            stream=False,
+        )
+
+    if explanation_obj is None:
+        titles = ", ".join([it.title for it in req.bundle.items[:6]])
+        fallback = (
+            f"Summary: Selected {len(req.bundle.items)} items totaling {req.bundle.currency} {req.bundle.subtotal:.2f}. "
+            f"Key picks include {titles or 'the listed items'}.\n\n"
+            "Constraints: Matched allowed categories and stayed within budget.\n\n"
+            "Preference signal: Emphasized consistency with your stated intent."
+        )
+        return ExplainResult(text=fallback)
+
+    explanation_content = _get_attr(explanation_obj, "content") or ""
+    if not isinstance(explanation_content, str):
+        explanation_content = str(explanation_content)
+
+    return ExplainResult(text=explanation_content)
 
 
 @router.post("/feedback")
