@@ -68,18 +68,15 @@ app = FastAPI(
 
 # Configure CORS
 settings = get_settings()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://me-agent.tech",
-        "https://www.me-agent.tech",
-        "https://me-agent-gbvn1a6l4-laithalzs-projects.vercel.app",
-        "http://localhost:3000",  # optional for local dev
-    ],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 
 
