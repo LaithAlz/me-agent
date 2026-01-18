@@ -420,7 +420,6 @@ export default function DemoPage() {
   return (
     <DashboardLayout>
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Left Column: Intent + Constraints */}
         <div className="space-y-6">
           <IntentFormPanel
             form={intentForm}
@@ -431,16 +430,14 @@ export default function DemoPage() {
           />
         </div>
 
-        {/* Right Column: Agent Output */}
         <div className="space-y-6">
           <BundleResultPanel
             bundle={bundle}
-            maxSpend={intentForm.maxSpend}
-            blockedItems={blockedItems}
+            maxSpend={(intentForm as any).maxSpend}
             onUpdateQuantity={handleUpdateQuantity}
             onRemoveItem={handleRemoveItem}
           />
-          
+
           <CartPanel
             cart={cart}
             bundle={bundle}
@@ -448,19 +445,18 @@ export default function DemoPage() {
             onAddLines={handleAddLines}
             onOpenCheckout={handleOpenCheckout}
           />
-          
+
           <ExplainPanel
             explanation={explanation}
             bundle={bundle}
             isLoading={isExplaining}
             onExplain={handleExplain}
           />
-          
+
           <AuditPreviewPanel events={getRecentEvents()} />
         </div>
       </div>
 
-      {/* Passkey Consent Modal */}
       <PasskeyConsentModal
         open={showPasskeyModal}
         state={passkeyState}
@@ -469,13 +465,12 @@ export default function DemoPage() {
         onRetry={handlePasskeyRetry}
       />
 
-      {/* Voice Explainer - Top right */}
       {showVoiceExplainer && (
-        <VoiceExplainer 
-          explanation={voiceExplanation || explanation?.reasoning}
+        <VoiceExplainer
+          explanation={voiceExplanation || explanation?.text || ''}
           onClose={() => setShowVoiceExplainer(false)}
         />
       )}
     </DashboardLayout>
-  );
+  )
 }

@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     BACKBOARD_API_KEY: Optional[str] = None
 
     # MongoDB
-    MONGODB_URI: Optional[str] = None
+    MONGO_URI: Optional[str] = None
     MONGODB_DB_NAME: str = "meagent"
 
     # ElevenLabs Voice API
@@ -42,8 +42,8 @@ class Settings(BaseSettings):
 
     # WebAuthn settings
     WEBAUTHN_RP_ID: str = "localhost"
-    WEBAUTHN_RP_NAME: str = "Me-Agent"
-    WEBAUTHN_ORIGIN: str = "http://localhost:5173"
+    WEBAUTHN_RP_NAME: str = "Me-Agent Demo"
+    WEBAUTHN_ORIGIN: str = "http://localhost:8080"
 
     # Demo mode
     DEMO_MODE: bool = True

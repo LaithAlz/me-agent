@@ -5,6 +5,12 @@
 
 import type { BundleResult, ExplainResult, IntentForm } from '@/types'
 
+import {
+  isPlatformAuthenticatorAvailable,
+  authorizeActionWithPasskey,
+  isWebAuthnSupported,
+} from './webauthn'
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
 // Simulated delay for realistic UX
@@ -32,12 +38,6 @@ async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
 // -------------------------------
 let passkeyWillSucceed = true
 
-import { 
-  isPlatformAuthenticatorAvailable, 
-  authorizeActionWithPasskey,
-  isWebAuthnSupported 
-} from './webauthn';
-
 export function setPasskeyDemoMode(willSucceed: boolean) {
   passkeyWillSucceed = willSucceed
 }
@@ -48,26 +48,26 @@ export function setPasskeyDemoMode(willSucceed: boolean) {
  */
 export async function authorizePasskey(): Promise<{ success: boolean; error?: string }> {
   // Try real WebAuthn first
-  if (isWebAuthnSupported()) {
-    const hasPlatformAuth = await isPlatformAuthenticatorAvailable();
-    
-    if (hasPlatformAuth) {
-      // Use real biometric authentication
-      console.log('Using real WebAuthn biometric authentication');
-      const result = await authorizeActionWithPasskey('generateBundle');
-      return { success: result.success, error: result.error };
+  try {
+    if (isWebAuthnSupported()) {
+      const hasPlatformAuth = await isPlatformAuthenticatorAvailable()
+
+      if (hasPlatformAuth) {
+        // Use real biometric authentication
+        const result = await authorizeActionWithPasskey('generateBundle')
+        return { success: result.success, error: result.error }
+      }
     }
+  } catch (e) {
+    // If WebAuthn fails for any reason, fall back to demo mode
+    console.warn('WebAuthn failed, falling back to demo mode:', e)
   }
-  
+
   // Fallback to demo mode
-  console.log('WebAuthn not available, using demo mode');
-  await delay(1500); // Simulate biometric check
-  
-  if (passkeyWillSucceed) {
-    return { success: true };
-  } else {
-    return { success: false, error: 'Passkey verification failed. Please try again.' };
-  }
+  await delay(1500) // Simulate biometric check
+
+  if (passkeyWillSucceed) return { success: true }
+  return { success: false, error: 'Passkey verification failed. Please try again.' }
 }
 
 // -------------------------------

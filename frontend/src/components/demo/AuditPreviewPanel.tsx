@@ -20,6 +20,7 @@ export function AuditPreviewPanel({ events }: AuditPreviewPanelProps) {
             <FileText className="h-5 w-5 text-primary" />
             Audit Log
           </CardTitle>
+
           <Link to="/audit">
             <Button variant="ghost" size="sm" className="gap-1">
               View all
@@ -28,14 +29,16 @@ export function AuditPreviewPanel({ events }: AuditPreviewPanelProps) {
           </Link>
         </div>
       </CardHeader>
+
       <CardContent>
         {recentEvents.length === 0 ? (
           <div className="text-center py-8">
             <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center mx-auto mb-3">
               <FileText className="h-5 w-5 text-muted-foreground" />
             </div>
+
             <p className="text-sm text-muted-foreground">
-              No events yet. Generate a bundle to start logging.
+              No events yet. Generate recommendations or submit feedback to start logging.
             </p>
           </div>
         ) : (
