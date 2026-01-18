@@ -423,10 +423,6 @@ export async function authenticatePasskey(username?: string): Promise<AuthResult
  * 2. Otherwise, simulate the biometric prompt for demo
  */
 export async function authorizeActionWithPasskey(action: string): Promise<AuthResult> {
-  // IMPORTANT: This function ALWAYS authorizes the action, even if passkey fails.
-  // This is necessary for iOS/localhost compatibility (no SSL cert = no passkey support).
-  // The function will attempt real biometric auth if available, but always succeeds.
-  
   try {
     // Check if platform authenticator is available
     const hasPlatformAuth = await isPlatformAuthenticatorAvailable();
@@ -438,10 +434,6 @@ export async function authorizeActionWithPasskey(action: string): Promise<AuthRe
       return { success: true, userId: 'demo-user-1' };
     }
 
-    // Try to trigger a WebAuthn assertion
-    // This will show the biometric prompt even if we don't have credentials registered
-    // The browser will show "Use your fingerprint" or similar
-    
     // First, check if we have a session (user already registered)
     const sessionResponse = await fetch(`${API_BASE}/auth/session`, {
       credentials: 'include',
@@ -452,23 +444,29 @@ export async function authorizeActionWithPasskey(action: string): Promise<AuthRe
       if (session.authenticated && session.username) {
         // User is registered, try real WebAuthn authentication
         const result = await authenticatePasskey(session.username);
-        if (result.success) {
-          return result;
-        }
-        // If real WebAuthn fails, fall through to demo (still returns success)
+        // Return the actual result (success or failure)
+        return result;
       }
     }
     
-    // No registered user or auth failed - use demo simulation
-    // but still try to show a "fake" biometric prompt to demonstrate the UX
+    // No registered user - use demo simulation
     console.log('No registered passkey, using demo biometric simulation');
     await new Promise(resolve => setTimeout(resolve, 1500));
     return { success: true, userId: 'demo-user-1' };
     
   } catch (error) {
-    console.error('Action authorization error (proceeding anyway):', error);
-    // ALWAYS fall back to success - iOS/localhost can't support real passkeys
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    return { success: true, userId: 'demo-user-1' };
+    console.error('Action authorization error:', error);
+    
+    // Handle user cancellation
+    if (error instanceof DOMException) {
+      if (error.name === 'NotAllowedError') {
+        return { success: false, error: 'Biometric verification was cancelled' };
+      }
+      if (error.name === 'SecurityError') {
+        return { success: false, error: 'Security error - check that you\'re on a secure connection' };
+      }
+    }
+    
+    return { success: false, error: 'Failed to authorize action' };
   }
 }

@@ -47,7 +47,7 @@ export default function DemoPage() {
   const [policy, setPolicy] = useState<AgentPolicy | null>(null);
   
   // Voice explainer state
-  const [showVoiceExplainer, setShowVoiceExplainer] = useState(true);
+  const [showVoiceExplainer, setShowVoiceExplainer] = useState(false);
   const [voiceExplanation, setVoiceExplanation] = useState<string>('');
 
   // Sync intent form to localStorage
@@ -94,6 +94,7 @@ export default function DemoPage() {
 
     if (result.success) {
       setPasskeyState('success');
+      setShowVoiceExplainer(true);
       
       // Authority check before generating bundle
       try {
@@ -164,6 +165,7 @@ export default function DemoPage() {
       }, 1000);
     } else {
       setPasskeyState('failed');
+      setShowVoiceExplainer(false);
       addEvent('CONSENT_DENIED', result.error || 'Passkey verification failed', {});
     }
   }, [intentForm, addEvent]);
@@ -171,6 +173,7 @@ export default function DemoPage() {
   const handlePasskeyCancel = useCallback(() => {
     setShowPasskeyModal(false);
     setPasskeyState('idle');
+    setShowVoiceExplainer(false);
   }, []);
 
   const handlePasskeyRetry = useCallback(() => {
@@ -182,6 +185,7 @@ export default function DemoPage() {
     setBundle(null);
     setExplanation(null);
     setCart({ cartId: null, checkoutUrl: null, isCreating: false, isAddingLines: false });
+    setShowVoiceExplainer(false);
   }, []);
 
   const handleUpdateQuantity = useCallback((itemId: string, delta: number) => {
