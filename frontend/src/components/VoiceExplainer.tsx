@@ -239,8 +239,8 @@ export function VoiceExplainer({ explanation, onClose }: VoiceExplainerProps) {
         initialImage={uploadedImage}
       />
       
-      {/* Top-right floating card */}
-      <Card className="fixed top-4 right-4 w-80 z-40 shadow-lg">
+      {/* Top-right floating card with blur effect */}
+      <Card className="fixed top-4 right-4 w-80 z-40 shadow-lg bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 border border-white/10">
         <div className="p-4 space-y-3">
           {/* Header with avatar */}
           <div className="flex items-center justify-between">
