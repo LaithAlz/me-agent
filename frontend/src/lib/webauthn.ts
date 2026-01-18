@@ -433,16 +433,26 @@ export async function authorizeActionWithPasskey(action: string): Promise<AuthRe
     // Check if we have a session (user already registered)
     const sessionResponse = await fetch(`${API_BASE}/api/auth/session`, {
       credentials: 'include',
+      method: 'GET',
     });
+    
+    console.log('Session response status:', sessionResponse.status);
     
     if (sessionResponse.ok) {
       const session = await sessionResponse.json();
+      console.log('Session data:', { authenticated: session.authenticated, username: session.username });
+      
       if (session.authenticated && session.username) {
         // User is registered, trigger real WebAuthn authentication
         console.log('Found registered user, triggering Windows Hello/biometric prompt...');
         const result = await authenticatePasskey(session.username);
         return result;
+      } else {
+        // Session exists but not authenticated
+        console.log('Session exists but not authenticated. User may be in demo mode.');
       }
+    } else {
+      console.log('Session check failed:', sessionResponse.status);
     }
     
     // No registered user - must register first
