@@ -28,7 +28,7 @@ from typing import Optional, Any, Dict, List
 import pymongo
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backboard import BackboardClient
 from backboard.exceptions import BackboardNotFoundError, BackboardAPIError
