@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # ElevenLabs Voice API
     ELEVENLABS_API_KEY: Optional[str] = None
-    ELEVENLABS_VOICE_ID: str = "21m00Tcm4TlvDq8ikWAM"
+    ELEVENLABS_VOICE_ID: str = "7zEWfkhTZw83mmRtzliA"
 
     # Google Gemini API (for avatar generation)
     GOOGLE_GENERATIVE_AI_API_KEY: Optional[str] = None
