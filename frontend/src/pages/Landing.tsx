@@ -36,7 +36,7 @@ export default function LandingPage() {
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6 max-w-4xl mx-auto">
             A Secure Identity-Bound
             <br />
-            <span className="text-primary">AI Agent</span>
+            <span className="text-primary">AI Shopping Agent</span>
           </h1>
           
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
@@ -130,11 +130,11 @@ export default function LandingPage() {
         <div className="container mx-auto px-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
+              <Crown className="h-5 w-5 text-primary" />
               <span className="font-semibold">Me-Agent</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              Hackathon Demo • Secure Identity-Bound AI Agent
+              Secure Identity-Bound AI Shopping Agent
             </p>
           </div>
         </div>
