@@ -14,19 +14,23 @@ router = APIRouter(prefix="/policy", tags=["Policy"])
 DEFAULT_DEMO_USER = "demo-user-1"
 
 ALL_ALLOWED_CATEGORIES = [
-    "accessories",
-    "books",
-    "construction",
+    "office",
     "electronics",
-    "entertainment",
+    "clothing",
+    "home",
+    "sports",
+    "books",
+    "beauty",
+    "food",
+    "accessories",
     "lifestyle",
     "fashion",
     "grocery",
     "fitness",
-    "home",
-    "office",
-    "smart_home",
+    "entertainment",
     "wellness",
+    "smart_home",
+    "construction",
 ]
 
 LEGACY_CATEGORY_SETS = [
