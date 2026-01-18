@@ -38,8 +38,17 @@ def generate_bundle(payload: BundleRequest) -> BundleResult:
 	past_vendors = {_normalize(p.vendor) for p in past_purchases}
 	past_products = {p.productId for p in past_purchases}
 	brand_prefs = {_normalize(b) for b in payload.brandPreferences}
+	cart_quantities = {item.id: item.qty for item in (payload.cartItems or [])}
 
-	available = [p for p in PRODUCTS if p.productType in payload.allowedCategories]
+	allowed_categories = {_normalize(c) for c in payload.allowedCategories}
+	def remaining_stock(product) -> int:
+		return max((product.stockQuantity or 0) - cart_quantities.get(product.id, 0), 0)
+
+	available = [
+		p
+		for p in PRODUCTS
+		if _normalize(p.productType) in allowed_categories and remaining_stock(p) > 0
+	]
 
 	def score_product(product) -> tuple:
 		vendor_norm = _normalize(product.vendor)
@@ -83,13 +92,14 @@ def generate_bundle(payload: BundleRequest) -> BundleResult:
 		)
 		selected_items.append(
 			BundleItem(
-				id=product.variants[0].id,
+				id=product.id,
 				title=product.title,
 				price=price,
 				category=product.productType,
 				merchant=product.vendor,
 				reasonTags=reason_tags,
 				qty=1,
+				stockQuantity=product.stockQuantity,
 				imageUrl=product.images[0] if product.images else None,
 			)
 		)
@@ -105,7 +115,7 @@ def generate_bundle(payload: BundleRequest) -> BundleResult:
 		for product in sorted_by_price:
 			if len(selected_items) >= 3:
 				break
-			if any(item.id == product.variants[0].id for item in selected_items):
+			if any(item.id == product.id for item in selected_items):
 				continue
 			add_product(product)
 

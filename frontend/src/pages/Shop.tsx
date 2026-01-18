@@ -4,7 +4,7 @@ import { ProductGrid } from "../components/demo/ProductGrid";
 import { toast } from "sonner";
 import { DashboardLayout } from '@/components/layout/DashboardLayout';  
 import type { Product } from "../types";
-import { addCartItem } from "../lib/storage";
+import { addCartItem, loadCartItems } from "../lib/storage";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -19,6 +19,7 @@ type ShopifyProduct = {
   images: string[];
   variants: { id: string; title: string; price: number }[];
   inStock?: boolean;
+    stockQuantity?: number;
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
@@ -32,6 +33,8 @@ export default function WebStore() {
     const [maxPrice, setMaxPrice] = useState("");
     const [inStockOnly, setInStockOnly] = useState(false);
     const [sort, setSort] = useState("featured");
+
+    const [cartItems, setCartItems] = useState(() => loadCartItems());
 
     const {
         data: products,
@@ -54,7 +57,8 @@ export default function WebStore() {
                 tags: product.tags ?? [],
                 productType: product.productType,
                 vendor: product.vendor,
-                inStock: product.inStock ?? true,
+                stockQuantity: product.stockQuantity ?? (product.inStock ? 10 : 0),
+                inStock: (product.stockQuantity ?? (product.inStock ? 10 : 0)) > 0,
             }));
         },
     });
@@ -110,7 +114,19 @@ export default function WebStore() {
         return results;
     }, [products, search, category, vendor, minPrice, maxPrice, inStockOnly, sort]);
 
+    const cartQuantities = useMemo(() => {
+        return cartItems.reduce<Record<string, number>>((acc, item) => {
+            acc[item.id] = (acc[item.id] ?? 0) + item.qty;
+            return acc;
+        }, {});
+    }, [cartItems]);
+
     const handleAddToCart = (product: Product) => {
+        const currentQty = cartQuantities[product.id] ?? 0;
+        if (product.stockQuantity <= currentQty) {
+            toast.error("No more stock available for this item.");
+            return;
+        }
         addCartItem({
             id: product.id,
             title: product.title,
@@ -121,7 +137,9 @@ export default function WebStore() {
             productType: product.productType,
             vendor: product.vendor,
             inStock: product.inStock,
+            stockQuantity: product.stockQuantity,
         });
+        setCartItems(loadCartItems());
         toast.success("Added to checkout", { description: product.title });
     };
 
@@ -231,7 +249,11 @@ export default function WebStore() {
                 {isLoading ? (
                     <p className="text-gray-600">Loading products...</p>
                 ) : (
-                    <ProductGrid products={filteredProducts} onAddToCart={handleAddToCart} />
+                    <ProductGrid
+                        products={filteredProducts}
+                        onAddToCart={handleAddToCart}
+                        cartQuantities={cartQuantities}
+                    />
                 )}
             </div>
         </DashboardLayout> 
