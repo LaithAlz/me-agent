@@ -12,8 +12,7 @@ export default function LandingPage() {
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary gap-0.5">
-                <Crown className="h-4 w-4 text-primary-foreground" />
-                <Crown className="h-4 w-4 text-primary-foreground" />
+                <Crown className="h-5 w-5 text-primary-foreground" />
               </div>
               <span className="text-lg font-semibold">Me-Agent</span>
             </div>
@@ -224,20 +223,20 @@ export default function LandingPage() {
         <div className="container mx-auto px-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <Crown className="h-5 w-5 text-primary" />
+              <Crown className="h-5 w-5 text-primary text-white" />
               <span className="font-semibold">Me-Agent</span>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-white">
               Secure, Identity-Bound AI Shopping Agent
             </p>
             <div className="flex items-center gap-4">
-              <Link to="/security" className="text-sm text-muted-foreground hover:text-foreground">
+              <Link to="/security" className="text-sm text-white hover:opacity-80">
                 Security
               </Link>
-              <Link to="/audit" className="text-sm text-muted-foreground hover:text-foreground">
+              <Link to="/audit" className="text-sm text-white hover:opacity-80">
                 Audit Log
               </Link>
-              <Link to="/demo-script" className="text-sm text-muted-foreground hover:text-foreground">
+              <Link to="/demo-script" className="text-sm text-white hover:opacity-80">
                 Demo Script
               </Link>
             </div>
