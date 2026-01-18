@@ -26,3 +26,4 @@ pillow>=11.0.0
 
 backboard-sdk
 python-multipart
+backboard
