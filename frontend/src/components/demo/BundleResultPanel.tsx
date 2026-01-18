@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Package, Minus, Plus, Trash2, AlertTriangle, ShieldX } from 'lucide-react';
 import type { BundleResult } from '@/types';
+import { useEffect } from 'react';
 
 interface BundleResultPanelProps {
   bundle: BundleResult | any | null;
@@ -126,7 +127,9 @@ export function BundleResultPanel({
   const remaining = maxSpend - normalized.subtotal;
   const isNearLimit = remaining < maxSpend * 0.1;
   const isOverLimit = remaining < 0;
-
+  useEffect(() => {
+    console.log('normalized', normalized);
+  }, [normalized]);
   return (
     <Card>
       <CardHeader className="pb-3">
