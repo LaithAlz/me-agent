@@ -1,10 +1,14 @@
 // Local storage utilities for Me-Agent
-import type { PermissionPolicy, IntentForm, AuditEvent } from '@/types';
+import type { PermissionPolicy, IntentForm, AuditEvent, BundleResult, ExplainResult, CartItem } from '@/types';
 import { DEFAULT_PERMISSION_POLICY, DEFAULT_INTENT_FORM } from '@/types';
 
 const STORAGE_KEYS = {
   PERMISSION_POLICY: 'meagent_permission_policy',
   LAST_INTENT: 'meagent_last_intent',
+  LAST_BUNDLE: 'meagent_last_bundle',
+  LAST_EXPLANATION: 'meagent_last_explanation',
+  CART_ITEMS: 'meagent_cart_items',
+  CHECKOUT_URL: 'meagent_checkout_url',
   AUDIT_LOG: 'meagent_audit_log',
 } as const;
 
@@ -46,6 +50,147 @@ export function loadLastIntent(): IntentForm {
     console.warn('Failed to load last intent:', e);
   }
   return DEFAULT_INTENT_FORM;
+}
+
+export function saveLastBundle(bundle: BundleResult | null): void {
+  try {
+    if (!bundle) {
+      localStorage.removeItem(STORAGE_KEYS.LAST_BUNDLE);
+      return;
+    }
+    localStorage.setItem(STORAGE_KEYS.LAST_BUNDLE, JSON.stringify(bundle));
+  } catch (e) {
+    console.warn('Failed to save last bundle:', e);
+  }
+}
+
+export function loadLastBundle(): BundleResult | null {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.LAST_BUNDLE);
+    if (stored) {
+      return JSON.parse(stored) as BundleResult;
+    }
+  } catch (e) {
+    console.warn('Failed to load last bundle:', e);
+  }
+  return null;
+}
+
+export function saveLastExplanation(explanation: ExplainResult | null): void {
+  try {
+    if (!explanation) {
+      localStorage.removeItem(STORAGE_KEYS.LAST_EXPLANATION);
+      return;
+    }
+    localStorage.setItem(STORAGE_KEYS.LAST_EXPLANATION, JSON.stringify(explanation));
+  } catch (e) {
+    console.warn('Failed to save last explanation:', e);
+  }
+}
+
+export function loadLastExplanation(): ExplainResult | null {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.LAST_EXPLANATION);
+    if (stored) {
+      return JSON.parse(stored) as ExplainResult;
+    }
+  } catch (e) {
+    console.warn('Failed to load last explanation:', e);
+  }
+  return null;
+}
+
+export function loadCartItems(): CartItem[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEYS.CART_ITEMS);
+    if (stored) {
+      return JSON.parse(stored) as CartItem[];
+    }
+  } catch (e) {
+    console.warn('Failed to load cart items:', e);
+  }
+  return [];
+}
+
+export function saveCartItems(items: CartItem[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CART_ITEMS, JSON.stringify(items));
+  } catch (e) {
+    console.warn('Failed to save cart items:', e);
+  }
+}
+
+export function addCartItem(item: CartItem): CartItem[] {
+  const existing = loadCartItems();
+  if (typeof item.stockQuantity === 'number' && item.stockQuantity <= 0) {
+    return existing;
+  }
+  const found = existing.find(existingItem => existingItem.id === item.id);
+  const updated = found
+    ? existing.map(existingItem => {
+        if (existingItem.id !== item.id) return existingItem;
+        const maxQty = existingItem.stockQuantity ?? item.stockQuantity;
+        const nextQty = existingItem.qty + item.qty;
+        return {
+          ...existingItem,
+          qty: typeof maxQty === 'number' ? Math.min(nextQty, maxQty) : nextQty,
+          stockQuantity: maxQty ?? existingItem.stockQuantity,
+        };
+      })
+    : [...existing, item];
+  saveCartItems(updated);
+  return updated;
+}
+
+export function updateCartItemQty(itemId: string, qty: number): CartItem[] {
+  const existing = loadCartItems();
+  const updated = existing
+    .map(item => {
+      if (item.id !== itemId) return item;
+      const maxQty = item.stockQuantity;
+      const clamped = typeof maxQty === 'number' ? Math.min(qty, maxQty) : qty;
+      const nextQty = typeof maxQty === 'number' && maxQty <= 0 ? 0 : Math.max(1, clamped);
+      return { ...item, qty: nextQty };
+    })
+    .filter(item => item.qty > 0);
+  saveCartItems(updated);
+  return updated;
+}
+
+export function removeCartItem(itemId: string): CartItem[] {
+  const existing = loadCartItems();
+  const updated = existing.filter(item => item.id !== itemId);
+  saveCartItems(updated);
+  return updated;
+}
+
+export function clearCartItems(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.CART_ITEMS);
+  } catch (e) {
+    console.warn('Failed to clear cart items:', e);
+  }
+}
+
+export function saveCheckoutUrl(url: string | null): void {
+  try {
+    if (!url) {
+      localStorage.removeItem(STORAGE_KEYS.CHECKOUT_URL);
+      return;
+    }
+    localStorage.setItem(STORAGE_KEYS.CHECKOUT_URL, url);
+  } catch (e) {
+    console.warn('Failed to save checkout url:', e);
+  }
+}
+
+export function loadCheckoutUrl(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.CHECKOUT_URL);
+  } catch (e) {
+    console.warn('Failed to load checkout url:', e);
+  }
+  return null;
 }
 
 export function saveAuditLog(events: AuditEvent[]): void {

@@ -6,11 +6,12 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Setup from "./pages/Setup";
 import Demo from "./pages/Demo";
-import Settings from "./pages/Settings";
 import Audit from "./pages/Audit";
 import Security from "./pages/Security";
 import CompetitiveDemo from "./pages/CompetitiveDemo";
 import NotFound from "./pages/NotFound";
+import WebStore from "./pages/Shop";
+import Checkout from "./pages/Checkout";
 
 const queryClient = new QueryClient();
 
@@ -23,8 +24,9 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/setup" element={<Setup />} />
+          <Route path="/shop" element={<WebStore />} />
+          <Route path="/checkout" element={<Checkout />} />
           <Route path="/demo" element={<Demo />} />
-          <Route path="/settings" element={<Settings />} />
           <Route path="/audit" element={<Audit />} />
           <Route path="/security" element={<Security />} />
           <Route path="/demo-script" element={<CompetitiveDemo />} />

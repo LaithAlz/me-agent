@@ -10,6 +10,7 @@ interface BundleResultPanelProps {
   blockedItems?: string[];
   onUpdateQuantity: (itemId: string, delta: number) => void;
   onRemoveItem: (itemId: string) => void;
+  cartQuantities?: Record<string, number>;
 }
 
 type NormalizedItem = {
@@ -19,6 +20,8 @@ type NormalizedItem = {
   price: number;
   qty: number;
   tags: string[];
+  imageUrl?: string;
+  stockQuantity?: number;
 };
 
 type NormalizedBundle = {
@@ -71,7 +74,15 @@ function normalizeBundle(bundle: any): NormalizedBundle {
       .map((t: any) => safeString(t, ''))
       .filter(Boolean);
 
-    return { id, title, merchant, price, qty, tags };
+    const imageUrl = safeString(item?.imageUrl, safeString(item?.image, ''));
+    const stockQuantity =
+      typeof item?.stockQuantity === 'number'
+        ? item.stockQuantity
+        : typeof item?.stock === 'number'
+          ? item.stock
+          : undefined;
+
+    return { id, title, merchant, price, qty, tags, imageUrl, stockQuantity };
   });
 
   const subtotal =
@@ -93,6 +104,7 @@ export function BundleResultPanel({
   blockedItems = [],
   onUpdateQuantity,
   onRemoveItem,
+  cartQuantities,
 }: BundleResultPanelProps) {
   if (!bundle) {
     return (
@@ -122,7 +134,7 @@ export function BundleResultPanel({
           <Package className="h-5 w-5 text-primary" />
           Recommended Bundle
           <Badge variant="secondary" className="ml-auto">
-            {normalized.items.length} items
+            {normalized.items.reduce((sum, item) => sum + item.qty, 0)} items
           </Badge>
         </CardTitle>
       </CardHeader>
@@ -137,6 +149,7 @@ export function BundleResultPanel({
               isBlocked={blockedItems.includes(item.id)}
               onUpdateQuantity={(delta) => onUpdateQuantity(item.id, delta)}
               onRemove={() => onRemoveItem(item.id)}
+              cartQty={cartQuantities?.[item.id] ?? 0}
             />
           ))}
         </div>
@@ -215,20 +228,32 @@ function BundleItemRow({
   isBlocked = false,
   onUpdateQuantity,
   onRemove,
+  cartQty,
 }: {
   item: NormalizedItem;
   isBlocked?: boolean;
   onUpdateQuantity: (delta: number) => void;
   onRemove: () => void;
+  cartQty: number;
 }) {
+  const maxQty = item.stockQuantity ?? Number.POSITIVE_INFINITY;
+  const remaining = Math.max(maxQty - cartQty, 0);
+  const canIncrease = item.qty < remaining;
   return (
     <div className={`py-4 first:pt-0 last:pb-0 ${isBlocked ? 'opacity-60' : ''}`}>
       <div className="flex gap-3">
-        {/* Image placeholder */}
-        <div className={`h-16 w-16 rounded-lg flex items-center justify-center shrink-0 ${
-          isBlocked ? 'bg-destructive/10 ring-2 ring-destructive' : 'bg-muted'
-        }`}>
-          {isBlocked ? (
+        <div
+          className={`h-16 w-16 rounded-lg flex items-center justify-center shrink-0 overflow-hidden ${
+            isBlocked ? 'bg-destructive/10 ring-2 ring-destructive' : 'bg-muted/40'
+          }`}
+        >
+          {item.imageUrl ? (
+            <img
+              src={item.imageUrl}
+              alt={item.title}
+              className="max-h-full max-w-full object-contain object-center"
+            />
+          ) : isBlocked ? (
             <ShieldX className="h-6 w-6 text-destructive" />
           ) : (
             <Package className="h-6 w-6 text-muted-foreground" />
@@ -255,6 +280,10 @@ function BundleItemRow({
               ${(item.price * item.qty).toFixed(2)}
             </span>
           </div>
+
+          <p className="text-xs text-muted-foreground">
+            Available: {Number.isFinite(remaining) ? remaining : '—'}
+          </p>
 
           {/* Tags */}
           {item.tags.length > 0 && (
@@ -290,6 +319,7 @@ function BundleItemRow({
                 size="icon"
                 className="h-7 w-7"
                 onClick={() => onUpdateQuantity(1)}
+                disabled={!canIncrease}
               >
                 <Plus className="h-3 w-3" />
               </Button>

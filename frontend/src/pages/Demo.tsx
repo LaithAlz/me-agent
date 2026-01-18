@@ -1,423 +1,421 @@
-import { useState, useEffect, useCallback } from 'react'
-import { DashboardLayout } from '@/components/layout/DashboardLayout'
-import { IntentFormPanel } from '@/components/demo/IntentFormPanel'
-import { BundleResultPanel } from '@/components/demo/BundleResultPanel'
-import { CartPanel } from '@/components/demo/CartPanel'
-import { ExplainPanel } from '@/components/demo/ExplainPanel'
-import { AuditPreviewPanel } from '@/components/demo/AuditPreviewPanel'
-import { PasskeyConsentModal } from '@/components/demo/PasskeyConsentModal'
-import { VoiceExplainer } from '@/components/VoiceExplainer'
-
-import { useAuditLog } from '@/hooks/useAuditLog'
-import { loadLastIntent, saveLastIntent, loadPermissionPolicy } from '@/lib/storage'
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { IntentFormPanel } from '@/components/demo/IntentFormPanel';
+import { BundleResultPanel } from '@/components/demo/BundleResultPanel';
+import { CartPanel } from '@/components/demo/CartPanel';
+import { ExplainPanel } from '@/components/demo/ExplainPanel';
+import { AuditPreviewPanel } from '@/components/demo/AuditPreviewPanel';
+import { PasskeyConsentModal } from '@/components/demo/PasskeyConsentModal';
+import { VoiceExplainer } from '@/components/VoiceExplainer';
+import { useAuditLog } from '@/hooks/useAuditLog';
 import {
-  authorizePasskey,
-  generateBundleWithExplain,
-  sendFeedback,
-  shopifyCartCreate,
-  shopifyCartLinesAdd,
-  type Product,
-} from '@/lib/api'
+  loadLastIntent,
+  saveLastIntent,
+  loadPermissionPolicy,
+  savePermissionPolicy,
+  loadLastBundle,
+  saveLastBundle,
+  loadLastExplanation,
+  saveLastExplanation,
+  addCartItem,
+  loadCartItems,
+} from '@/lib/storage';
+import { authorizePasskey, generateBundleWithExplain, explainBundle, sendFeedback } from '@/lib/api';
+import { checkAuthority } from '@/lib/backendApi';
+import type { IntentForm, BundleResult, ExplainResult, CartItem, PasskeyState } from '@/types';
+import { DEFAULT_INTENT_FORM } from '@/types';
+import { toast } from '@/hooks/use-toast';
 
-import { checkAuthority, getPolicy, type AgentPolicy } from '@/lib/backendApi'
-
-import type {
-  IntentForm,
-  BundleResult,
-  CartState,
-  ExplainResult,
-  PasskeyState,
-} from '@/types'
-import { DEFAULT_INTENT_FORM } from '@/types'
-import { toast } from '@/hooks/use-toast'
-
-const USER_ID = 'laith_test_001'
-
-// -----------------------
-// Demo Inventory (MVP)
-// -----------------------
-const DEMO_PRODUCTS: Product[] = [
-  { name: 'Apple Magic Trackpad', price: 169, brand: 'Apple', tags: ['office', 'minimal', 'ecosystem', 'ergonomic'] },
-  { name: 'Apple Magic Keyboard', price: 99, brand: 'Apple', tags: ['office', 'minimal', 'ecosystem'] },
-  { name: 'Logitech MX Master 3S', price: 99.99, brand: 'Logitech', tags: ['office', 'ergonomic', 'minimal'] },
-  { name: 'Logitech MX Keys Mini', price: 99.99, brand: 'Logitech', tags: ['office', 'minimal', 'quiet'] },
-  { name: 'Logitech Lift Vertical Mouse', price: 69.99, brand: 'Logitech', tags: ['office', 'ergonomic'] },
-  { name: 'Keychron K2 (Non-RGB)', price: 89.99, brand: 'Keychron', tags: ['office', 'minimal'] },
-  { name: 'Generic RGB Mechanical Keyboard', price: 89.99, brand: 'Unknown', tags: ['office', 'RGB', 'flashy', 'unknown'] },
-
-  { name: 'Dell UltraSharp 27" Monitor', price: 329, brand: 'Dell', tags: ['office', 'minimal', 'monitor'] },
-  { name: 'LG 27" 4K Monitor', price: 299, brand: 'LG', tags: ['office', 'monitor'] },
-  { name: 'Samsung Curved Gaming Monitor', price: 279, brand: 'Samsung', tags: ['office', 'monitor', 'flashy'] },
-
-  { name: 'Fully Jarvis Standing Desk', price: 499, brand: 'Fully', tags: ['office', 'ergonomic', 'standing_desk'] },
-  { name: 'IKEA BEKANT Desk', price: 249, brand: 'IKEA', tags: ['office', 'minimal', 'desk'] },
-  { name: 'Herman Miller Aeron Chair', price: 1199, brand: 'Herman Miller', tags: ['office', 'ergonomic', 'premium'] },
-  { name: 'Budget Office Chair (No Name)', price: 89, brand: 'Unknown', tags: ['office', 'unknown'] },
-  { name: 'Foot Rest Under Desk', price: 29.99, brand: 'Logitech', tags: ['office', 'ergonomic'] },
-
-  { name: 'Bose QuietComfort Headphones', price: 249, brand: 'Bose', tags: ['office', 'minimal', 'comfort', 'audio'] },
-  { name: 'Sony WH-1000XM5 Headphones', price: 329, brand: 'Sony', tags: ['office', 'audio', 'premium'] },
-  { name: 'Anker PowerConf Speakerphone', price: 119, brand: 'Anker', tags: ['office', 'audio', 'calls'] },
-  { name: 'Generic RGB Gaming Headset', price: 49.99, brand: 'Unknown', tags: ['office', 'RGB', 'flashy', 'unknown', 'audio'] },
-
-  { name: 'BenQ ScreenBar Monitor Light', price: 129, brand: 'BenQ', tags: ['office', 'minimal', 'lighting'] },
-  { name: 'LED Strip Lights (RGB)', price: 19.99, brand: 'Unknown', tags: ['office', 'RGB', 'flashy', 'unknown', 'lighting'] },
-  { name: 'Cable Management Kit', price: 24.99, brand: 'IKEA', tags: ['office', 'minimal', 'cables'] },
-  { name: 'Laptop Stand', price: 39.99, brand: 'Rain Design', tags: ['office', 'ergonomic', 'minimal'] },
-  { name: 'Webcam 1080p', price: 59.99, brand: 'Logitech', tags: ['office', 'calls'] },
-
-  { name: 'Anker 65W USB-C Charger', price: 49.99, brand: 'Anker', tags: ['office', 'power', 'minimal'] },
-  { name: 'Belkin MagSafe Charger', price: 39.99, brand: 'Belkin', tags: ['office', 'power', 'ecosystem'] },
-  { name: 'Generic Fast Charger (RGB)', price: 19.99, brand: 'Unknown', tags: ['office', 'power', 'RGB', 'unknown'] },
-
-  { name: 'Philips Hue Starter Kit', price: 199, brand: 'Philips', tags: ['smart_home', 'lighting', 'minimal'] },
-  { name: 'Apple HomePod mini', price: 99, brand: 'Apple', tags: ['smart_home', 'ecosystem', 'audio'] },
-  { name: 'Google Nest Thermostat', price: 129, brand: 'Google', tags: ['smart_home', 'energy'] },
-  { name: 'Ring Video Doorbell', price: 99, brand: 'Ring', tags: ['smart_home', 'security'] },
-
-  { name: 'DeWalt 20V Drill Driver Kit', price: 199, brand: 'DeWalt', tags: ['construction', 'tools'] },
-  { name: 'Milwaukee Measuring Tape', price: 19.99, brand: 'Milwaukee', tags: ['construction', 'tools'] },
-  { name: 'Hammer', price: 14.99, brand: 'Stanley', tags: ['construction', 'tools'] },
-  { name: 'Circular Saw', price: 149, brand: 'Makita', tags: ['construction', 'tools'] },
-  { name: 'Safety Glasses', price: 9.99, brand: '3M', tags: ['construction', 'safety'] },
-
-  { name: 'Drywall Sheets (Pack)', price: 79, brand: 'Generic', tags: ['construction', 'materials'] },
-  { name: 'Interior Paint (Gallon)', price: 39.99, brand: 'Behr', tags: ['construction', 'materials'] },
-  { name: 'Toolbox', price: 29.99, brand: 'Husky', tags: ['construction', 'tools'] },
-
-  { name: 'Samsung RGB Gaming Mouse', price: 59.99, brand: 'Samsung', tags: ['office', 'RGB', 'flashy'] },
-  { name: 'Ultra Flashy RGB Desk Mat', price: 24.99, brand: 'Unknown', tags: ['office', 'RGB', 'flashy', 'unknown'] },
-]
+const USER_ID = 'demo-user-1';
 
 export default function DemoPage() {
-  const [policy, setPolicy] = useState<AgentPolicy | null>(null)
+  const [intentForm, setIntentForm] = useState<IntentForm>(() => loadLastIntent());
+  const [bundle, setBundle] = useState<BundleResult | null>(() => loadLastBundle());
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => loadCartItems());
+  const [cartCount, setCartCount] = useState(() => loadCartItems().reduce((sum, item) => sum + item.qty, 0));
+  const [explanation, setExplanation] = useState<ExplainResult | null>(() => loadLastExplanation());
+  const [isExplaining, setIsExplaining] = useState(false);
 
-  const [intentForm, setIntentForm] = useState<IntentForm>(() => loadLastIntent())
-  const [bundle, setBundle] = useState<BundleResult | null>(null)
+  const [showPasskeyModal, setShowPasskeyModal] = useState(false);
+  const [passkeyState, setPasskeyState] = useState<PasskeyState>('idle');
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const [cart, setCart] = useState<CartState>({
-    cartId: null,
-    checkoutUrl: null,
-    isCreating: false,
-    isAddingLines: false,
-  })
-
-  const [rawExplanation, setRawExplanation] = useState<string | null>(null)
-  const [explanation, setExplanation] = useState<ExplainResult | null>(null)
-  const [isExplaining, setIsExplaining] = useState(false)
-
-  const [showPasskeyModal, setShowPasskeyModal] = useState(false)
-  const [passkeyState, setPasskeyState] = useState<PasskeyState>('idle')
-  const [isGenerating, setIsGenerating] = useState(false)
-
-  const [showVoiceExplainer, setShowVoiceExplainer] = useState(false)
-  const [voiceExplanation, setVoiceExplanation] = useState<string | null>(null)
-  const [blockedItems, setBlockedItems] = useState<string[]>([])
+  const [showVoiceExplainer, setShowVoiceExplainer] = useState(false);
+  const [voiceExplanation, setVoiceExplanation] = useState<string | null>(null);
+  const [blockedItems, setBlockedItems] = useState<string[]>([]);
+  const [inventory, setInventory] = useState<any[]>([]);
+  const [isInventoryLoading, setIsInventoryLoading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
-
-  const { addEvent, getRecentEvents } = useAuditLog()
-
-  useEffect(() => {
-    saveLastIntent(intentForm)
-  }, [intentForm])
+  const navigate = useNavigate();
+  const { addEvent, getRecentEvents } = useAuditLog();
 
   useEffect(() => {
-    const loadPolicyFromBackend = async () => {
+    const loadInventory = async () => {
+      setIsInventoryLoading(true);
       try {
-        const data = await getPolicy()
-        setPolicy(data.policy)
-        setIntentForm(prev => ({
-          ...prev,
-          maxSpend: data.policy.maxSpend,
-          allowedCategories: data.policy.allowedCategories,
-          agentEnabled: data.policy.agentEnabled,
-        }))
-      } catch {
-        const localPolicy = loadPermissionPolicy()
-        setIntentForm(prev => ({
-          ...prev,
-          maxSpend: localPolicy.maxSpend,
-          allowedCategories: localPolicy.allowedCategories,
-          agentEnabled: localPolicy.agentEnabled,
-        }))
+        const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+        const response = await fetch(`${base}/api/shopify/products/search`);
+        if (!response.ok) {
+          throw new Error('Failed to load products');
+        }
+        const data = await response.json();
+        setInventory(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Failed to load inventory:', error);
+        setInventory([]);
+      } finally {
+        setIsInventoryLoading(false);
       }
-    }
+    };
 
-    loadPolicyFromBackend()
-  }, [])
+    loadInventory();
+  }, []);
+
+  const cartQuantities = useMemo(() => {
+    return cartItems.reduce<Record<string, number>>((acc, item) => {
+      acc[item.id] = (acc[item.id] ?? 0) + item.qty;
+      return acc;
+    }, {});
+  }, [cartItems]);
+
+  useEffect(() => {
+    saveLastIntent(intentForm);
+    const currentPolicy = loadPermissionPolicy();
+    savePermissionPolicy({
+      ...currentPolicy,
+      maxSpend: intentForm.maxSpend,
+      allowedCategories: intentForm.allowedCategories,
+      agentEnabled: intentForm.agentEnabled,
+    });
+  }, [intentForm]);
+
+  useEffect(() => {
+    saveLastBundle(bundle);
+  }, [bundle]);
+
+  useEffect(() => {
+    saveLastExplanation(explanation);
+  }, [explanation]);
 
   const handleGenerate = useCallback(() => {
-    setShowPasskeyModal(true)
-    setPasskeyState('idle')
-  }, [])
+    setShowPasskeyModal(true);
+    setPasskeyState('idle');
+  }, []);
 
   const handlePasskeyAuthorize = useCallback(async () => {
-    setPasskeyState('prompting')
+    setPasskeyState('prompting');
 
-    const result = await authorizePasskey()
-
+    const result = await authorizePasskey();
     if (!result.success) {
-      setPasskeyState('failed')
-      setShowVoiceExplainer(false)
-      addEvent('CONSENT_DENIED', result.error || 'Passkey verification failed', {})
-      return
+      setPasskeyState('failed');
+      setShowVoiceExplainer(false);
+      addEvent('CONSENT_DENIED', result.error || 'Passkey verification failed', {});
+      return;
     }
 
-    setPasskeyState('success')
-    setShowVoiceExplainer(true)
+    setPasskeyState('success');
+    setShowVoiceExplainer(true);
 
-    // Optional authority check
     try {
       const authorityCheck = await checkAuthority({
         action: 'recommendBundle',
         cartTotal: 0,
-        categories: (intentForm as any).allowedCategories ?? [],
-        meta: { maxSpend: (intentForm as any).maxSpend, intent: (intentForm as any).shoppingIntent },
-      })
+        categories: intentForm.allowedCategories,
+        meta: {
+          maxSpend: intentForm.maxSpend,
+          intent: intentForm.shoppingIntent,
+        },
+      });
 
       if (authorityCheck.decision === 'BLOCK') {
-        setPasskeyState('failed')
-        setShowVoiceExplainer(false)
+        setPasskeyState('failed');
+        setShowVoiceExplainer(false);
+        setVoiceExplanation(authorityCheck.reason);
+        setBlockedItems(authorityCheck.blockedItems?.map((item) => item.id) ?? []);
         addEvent('AUTHORITY_BLOCKED', authorityCheck.reason, {
-          maxSpend: (intentForm as any).maxSpend,
-          allowedCategories: (intentForm as any).allowedCategories,
-        })
-        setVoiceExplanation(authorityCheck.reason)
+          maxSpend: intentForm.maxSpend,
+          allowedCategories: intentForm.allowedCategories,
+        });
         toast({
           title: 'Action blocked by policy',
           description: authorityCheck.reason,
           variant: 'destructive',
-        })
-        setTimeout(() => setShowPasskeyModal(false), 1500)
-        return
+        });
+        setTimeout(() => setShowPasskeyModal(false), 1500);
+        return;
       }
     } catch {
       // If authority service is down, proceed with local validation
     }
 
-    addEvent('CONSENT_GRANTED', 'User authorized recommendation generation via passkey', {
-      maxSpend: (intentForm as any).maxSpend,
-      allowedCategories: (intentForm as any).allowedCategories,
-      agentEnabled: (intentForm as any).agentEnabled,
-    })
+    addEvent('CONSENT_GRANTED', 'User authorized bundle generation via passkey', {
+      maxSpend: intentForm.maxSpend,
+      allowedCategories: intentForm.allowedCategories,
+      agentEnabled: intentForm.agentEnabled,
+    });
 
     setTimeout(async () => {
-      setShowPasskeyModal(false)
-      setIsGenerating(true)
+      setShowPasskeyModal(false);
+      setIsGenerating(true);
 
       try {
-        const { bundle: bundleResult, explanation: explainText } = await generateBundleWithExplain({
+        const currentCart = loadCartItems();
+        setCartItems(currentCart);
+        setCartCount(currentCart.reduce((sum, item) => sum + item.qty, 0));
+
+        if (!inventory.length) {
+          toast({
+            title: 'No inventory available',
+            description: 'Unable to reach the product catalog. Please retry in a moment.',
+            variant: 'destructive',
+          });
+          setIsGenerating(false);
+          return;
+        }
+
+        const products = inventory.map((product, index) => {
+          const price =
+            typeof product?.price === 'number'
+              ? product.price
+              : typeof product?.variants?.[0]?.price === 'number'
+                ? product.variants[0].price
+                : 0;
+          const baseTags = Array.isArray(product?.tags) ? product.tags : [];
+          const typeTag = typeof product?.productType === 'string' ? product.productType : '';
+          const tags = [typeTag, ...baseTags]
+            .map((tag) => String(tag).trim().toLowerCase())
+            .filter(Boolean);
+
+          return {
+            name: String(product?.title ?? product?.name ?? `Item ${index + 1}`),
+            price,
+            brand: String(product?.vendor ?? product?.merchant ?? 'Unknown'),
+            tags,
+          };
+        });
+
+        const result = await generateBundleWithExplain({
           ...intentForm,
           userId: USER_ID,
-          products: DEMO_PRODUCTS,
-        })
+          products,
+        });
 
-        setBundle(bundleResult)
-        setRawExplanation(explainText)
-        setExplanation(null)
-        setCart({ cartId: null, checkoutUrl: null, isCreating: false, isAddingLines: false })
+        const enrichedItems = result.bundle.items.map((item) => {
+          const match = inventory.find((product) => {
+            const title = String(product?.title ?? product?.name ?? '').trim().toLowerCase();
+            const vendor = String(product?.vendor ?? product?.merchant ?? '').trim().toLowerCase();
+            return title === item.title.trim().toLowerCase() && vendor === item.merchant.trim().toLowerCase();
+          });
 
-        const items = Array.isArray((bundleResult as any).items) ? (bundleResult as any).items : []
-        const subtotal =
-          typeof (bundleResult as any).subtotal === 'number'
-            ? (bundleResult as any).subtotal
-            : typeof (bundleResult as any).total === 'number'
-              ? (bundleResult as any).total
-              : 0
+          const imageUrl = match?.images?.[0] ?? match?.imageUrl ?? item.imageUrl;
+          const stockQuantity =
+            typeof match?.stockQuantity === 'number' ? match.stockQuantity : item.stockQuantity;
 
+          return {
+            ...item,
+            imageUrl: imageUrl || undefined,
+            stockQuantity,
+          };
+        });
+
+        const enrichedBundle = { ...result.bundle, items: enrichedItems };
+
+        setBundle(enrichedBundle);
+        setExplanation({ text: result.explanation });
+        setVoiceExplanation(result.explanation);
+        setBlockedItems([]);
+
+        const bundleItemCount = enrichedBundle.items.reduce((sum, item) => sum + item.qty, 0);
         addEvent(
           'BUNDLE_GENERATED',
-          `Generated ${items.length} items totaling $${Number(subtotal).toFixed(2)}`,
+          `Generated ${bundleItemCount} items totaling $${enrichedBundle.subtotal.toFixed(2)}`,
           {
-            maxSpend: (intentForm as any).maxSpend,
-            allowedCategories: (intentForm as any).allowedCategories,
+            maxSpend: intentForm.maxSpend,
+            allowedCategories: intentForm.allowedCategories,
           },
-          { itemCount: items.length, subtotal }
-        )
+          {
+            itemCount: bundleItemCount,
+            subtotal: enrichedBundle.subtotal,
+          }
+        );
 
         toast({
-          title: 'Recommendations generated',
-          description: `${items.length} items recommended within your $${(intentForm as any).maxSpend} budget`,
-        })
+          title: 'Bundle generated',
+          description: `${bundleItemCount} items recommended within your $${intentForm.maxSpend} budget`,
+        });
       } catch (error) {
         toast({
           title: 'Generation failed',
-          description: (error as Error)?.message || 'Could not generate recommendations. Please try again.',
+          description: 'Could not generate bundle. Please try again.',
           variant: 'destructive',
-        })
+        });
       } finally {
-        setIsGenerating(false)
+        setIsGenerating(false);
       }
-    }, 1000)
-  }, [intentForm, addEvent])
+    }, 1000);
+  }, [intentForm, addEvent]);
 
   const handlePasskeyCancel = useCallback(() => {
-    setShowPasskeyModal(false)
-    setPasskeyState('idle')
-    setShowVoiceExplainer(false)
-  }, [])
+    setShowPasskeyModal(false);
+    setPasskeyState('idle');
+    setShowVoiceExplainer(false);
+  }, []);
 
   const handlePasskeyRetry = useCallback(() => {
-    setPasskeyState('idle')
-  }, [])
+    setPasskeyState('idle');
+  }, []);
 
   const handleReset = useCallback(() => {
-    setIntentForm(DEFAULT_INTENT_FORM)
-    setBundle(null)
-    setRawExplanation(null)
-    setExplanation(null)
-    setCart({ cartId: null, checkoutUrl: null, isCreating: false, isAddingLines: false })
-    setShowVoiceExplainer(false)
-  }, [])
+    setIntentForm(DEFAULT_INTENT_FORM);
+    setBundle(null);
+    setExplanation(null);
+    setShowVoiceExplainer(false);
+    setVoiceExplanation(null);
+    setBlockedItems([]);
+
+    const currentCart = loadCartItems();
+    setCartItems(currentCart);
+    setCartCount(currentCart.reduce((sum, item) => sum + item.qty, 0));
+  }, []);
 
   const handleUpdateQuantity = useCallback((itemId: string, delta: number) => {
-    if (!bundle) return
+    if (!bundle) return;
 
-    setBundle(prev => {
-      if (!prev) return prev
-      const prevAny = prev as any
-      const prevItems: any[] = Array.isArray(prevAny.items) ? prevAny.items : []
-
-      const items = prevItems.map(item =>
-        item.id === itemId ? { ...item, qty: Math.max(1, (item.qty ?? 1) + delta) } : item
-      )
-
-      const subtotal = items.reduce(
-        (sum, item) => sum + Number(item.price) * Number(item.qty ?? 1),
-        0
-      )
-
-      return {
-        ...prevAny,
-        items,
-        subtotal: Math.round(subtotal * 100) / 100,
-      } as BundleResult
-    })
-  }, [bundle])
+    setBundle((prev) => {
+      if (!prev) return prev;
+      const items = prev.items.map((item) => {
+        if (item.id !== itemId) return item;
+        const maxQty = item.stockQuantity ?? Number.POSITIVE_INFINITY;
+        const remaining = Math.max(maxQty - (cartQuantities[item.id] ?? 0), 0);
+        const nextQty = Math.max(1, item.qty + delta);
+        return { ...item, qty: Math.min(nextQty, remaining || 1) };
+      });
+      const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+      return { ...prev, items, subtotal: Math.round(subtotal * 100) / 100 };
+    });
+  }, [bundle, cartQuantities]);
 
   const handleRemoveItem = useCallback(async (itemId: string) => {
-    if (!bundle) return
+    if (!bundle) return;
 
-    const itemsAny: any[] = Array.isArray((bundle as any).items) ? ((bundle as any).items as any[]) : []
-    const removed = itemsAny.find(i => i.id === itemId)
-    if (!removed) return
+    const removed = bundle.items.find((item) => item.id === itemId);
+    if (!removed) return;
 
-    // Update UI immediately
-    setBundle(prev => {
-      if (!prev) return prev
-      const prevAny = prev as any
-      const prevItems: any[] = Array.isArray(prevAny.items) ? prevAny.items : []
-      const items = prevItems.filter(item => item.id !== itemId)
-      const subtotal = items.reduce((sum, item) => sum + Number(item.price) * Number(item.qty ?? 1), 0)
-      return { ...prevAny, items, subtotal: Math.round(subtotal * 100) / 100 } as BundleResult
-    })
-
-    // Persist feedback
-    const rejectedLabel = String(removed.name ?? removed.title ?? removed.id ?? 'unknown_item')
+    setBundle((prev) => {
+      if (!prev) return prev;
+      const items = prev.items.filter((item) => item.id !== itemId);
+      const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
+      return { ...prev, items, subtotal: Math.round(subtotal * 100) / 100 };
+    });
 
     try {
       await sendFeedback({
         user_id: USER_ID,
-        rejected_items: [rejectedLabel],
+        rejected_items: [removed.title ?? removed.id],
         reason: 'User removed from bundle',
-      })
+      });
 
-      addEvent('FEEDBACK_SUBMITTED', `User rejected item: ${rejectedLabel}`, {}, { item: rejectedLabel })
-
+      addEvent('FEEDBACK_SUBMITTED', `User rejected item: ${removed.title}`, {}, { item: removed.title });
       toast({
         title: 'Feedback saved',
-        description: `Me-Agent will avoid "${rejectedLabel}" in future recommendations`,
-      })
+        description: `Me-Agent will avoid "${removed.title}" in future recommendations`,
+      });
     } catch {
       toast({
         title: 'Feedback failed',
         description: 'Could not save feedback. The bundle was still updated locally.',
         variant: 'destructive',
-      })
+      });
     }
-  }, [bundle, addEvent])
+  }, [bundle, addEvent]);
 
-  const handleCreateCart = useCallback(async () => {
-    setCart(prev => ({ ...prev, isCreating: true }))
+  const handleAddBundleToCart = useCallback(() => {
+    if (!bundle) return;
+    const currentCart = loadCartItems();
+    const currentQuantities = currentCart.reduce<Record<string, number>>((acc, item) => {
+      acc[item.id] = (acc[item.id] ?? 0) + item.qty;
+      return acc;
+    }, {});
 
-    try {
-      const result = await shopifyCartCreate()
-      setCart(prev => ({ ...prev, cartId: result.cartId, isCreating: false }))
+    const outOfStock: string[] = [];
+    const insufficient: string[] = [];
 
-      addEvent('CART_CREATED', 'Shopify cart created', {}, { cartId: result.cartId })
+    bundle.items.forEach((item) => {
+      const maxQty = item.stockQuantity ?? Number.POSITIVE_INFINITY;
+      const existingQty = currentQuantities[item.id] ?? 0;
+      const available = Math.max(maxQty - existingQty, 0);
+      if (available <= 0) {
+        outOfStock.push(item.title);
+      } else if (available < item.qty) {
+        insufficient.push(item.title);
+      }
+    });
 
-      toast({ title: 'Cart created', description: 'Ready to add items' })
-    } catch (error) {
-      setCart(prev => ({ ...prev, isCreating: false }))
+    if (outOfStock.length > 0 || insufficient.length > 0) {
+      const messages = [
+        outOfStock.length > 0 ? `Out of stock: ${outOfStock.join(', ')}` : null,
+        insufficient.length > 0 ? `Insufficient stock: ${insufficient.join(', ')}` : null,
+      ].filter(Boolean);
+
       toast({
-        title: 'Failed to create cart',
-        description: (error as Error)?.message || 'Please try again',
+        title: 'Bundle not added',
+        description: messages.join(' • '),
         variant: 'destructive',
-      })
-    }
-  }, [addEvent])
-
-  const handleAddLines = useCallback(async () => {
-    if (!cart.cartId || !bundle) return
-
-    const items: any[] = Array.isArray((bundle as any).items) ? (bundle as any).items : []
-
-    const missing = items.some(i => typeof i.merchandiseId !== 'string' || !i.merchandiseId.length)
-    if (missing) {
-      toast({
-        title: 'Cannot add to Shopify yet',
-        description: 'Recommendations do not include merchandiseId values. Add a mapping step to Shopify variants first.',
-        variant: 'destructive',
-      })
-      return
+      });
+      return;
     }
 
-    setCart(prev => ({ ...prev, isAddingLines: true }))
+    bundle.items.forEach((item) => {
+      addCartItem({
+        id: item.id,
+        title: item.title,
+        price: item.price,
+        qty: item.qty,
+        imageUrl: item.imageUrl,
+        stockQuantity: item.stockQuantity,
+      });
+    });
 
-    try {
-      const lines = items.map(item => ({
-        merchandiseId: item.merchandiseId,
-        quantity: item.qty ?? 1,
-      }))
+    const updatedCart = loadCartItems();
+    setCartItems(updatedCart);
+    const updatedCount = updatedCart.reduce((sum, item) => sum + item.qty, 0);
+    setCartCount(updatedCount);
 
-      const result = await shopifyCartLinesAdd({ cartId: cart.cartId, lines })
+    const bundleItemCount = bundle.items.reduce((sum, item) => sum + item.qty, 0);
+    addEvent('CART_LINES_ADDED', `Added ${bundleItemCount} items to checkout`, {}, { lineCount: bundleItemCount });
 
-      setCart(prev => ({
-        ...prev,
-        checkoutUrl: result.checkoutUrl,
-        isAddingLines: false,
-      }))
-
-      addEvent('CART_LINES_ADDED', `Added ${lines.length} items to cart`, {}, { lineCount: lines.length })
-      addEvent('CHECKOUT_LINK_READY', 'Checkout URL generated. User must click to proceed', {}, { checkoutUrl: result.checkoutUrl })
-
-      toast({ title: 'Items added to cart', description: 'Checkout is now available' })
-    } catch (error) {
-      setCart(prev => ({ ...prev, isAddingLines: false }))
-      toast({
-        title: 'Failed to add items',
-        description: (error as Error)?.message || 'Please try again',
-        variant: 'destructive',
-      })
-    }
-  }, [cart.cartId, bundle, addEvent])
+    toast({
+      title: 'Items added to checkout',
+      description: 'Review them in the Checkout tab',
+    });
+  }, [bundle, addEvent]);
 
   const handleOpenCheckout = useCallback(() => {
-    if (cart.checkoutUrl) window.open(cart.checkoutUrl, '_blank', 'noopener,noreferrer')
-  }, [cart.checkoutUrl])
+    navigate('/checkout');
+  }, [navigate]);
 
   const handleExplain = useCallback(async () => {
-    if (!bundle) return
-    setIsExplaining(true)
+    if (!bundle) return;
+    setIsExplaining(true);
+
     try {
-      const text = rawExplanation || 'No explanation was returned by the backend.'
-      setExplanation({ text } as ExplainResult)
-      addEvent('EXPLANATION_GENERATED', 'Agent explanation displayed', {}, { hasAudio: false })
+      const lines = bundle.items
+        .map((item) => {
+          const tags = item.reasonTags?.length ? ` (${item.reasonTags.join(', ')})` : '';
+          return `• ${item.title}${tags}`;
+        })
+        .join('\n');
+
+      const text = `Based on your intent, Me-Agent selected ${bundle.items.length} item(s) within your CAD $${intentForm.maxSpend} budget:\n${lines}`;
+      const result = await explainBundle({ text });
+      setExplanation(result);
+      addEvent('EXPLANATION_GENERATED', 'Agent explanation displayed', {}, { hasAudio: false });
     } finally {
-      setIsExplaining(false)
+      setIsExplaining(false);
     }
-  }, [bundle, rawExplanation, addEvent])
+  }, [bundle, intentForm.maxSpend, addEvent]);
 
   return (
     <DashboardLayout>
@@ -435,16 +433,17 @@ export default function DemoPage() {
         <div className="space-y-6">
           <BundleResultPanel
             bundle={bundle}
-            maxSpend={(intentForm as any).maxSpend}
+            maxSpend={intentForm.maxSpend}
+            blockedItems={blockedItems}
             onUpdateQuantity={handleUpdateQuantity}
             onRemoveItem={handleRemoveItem}
+            cartQuantities={cartQuantities}
           />
 
           <CartPanel
-            cart={cart}
             bundle={bundle}
-            onCreateCart={handleCreateCart}
-            onAddLines={handleAddLines}
+            cartCount={cartCount}
+            onAddBundle={handleAddBundleToCart}
             onOpenCheckout={handleOpenCheckout}
           />
 
@@ -477,5 +476,5 @@ export default function DemoPage() {
         />
       )}
     </DashboardLayout>
-  )
+  );
 }

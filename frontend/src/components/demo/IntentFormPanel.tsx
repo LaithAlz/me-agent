@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -8,9 +9,8 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { PermissionChip } from '@/components/shared/PermissionChip';
-import { Shield, Sparkles, RotateCcw, X, Plus, AlertCircle, Loader2, Save } from 'lucide-react';
-import type { IntentForm } from '@/types';
-import { AVAILABLE_CATEGORIES } from '@/types';
+import { Shield, Sparkles, RotateCcw, X, Plus, AlertCircle, Loader2 } from 'lucide-react';
+import type { IntentForm, Product } from '@/types';
 import { getPolicy, updatePolicy, type AgentPolicy } from '@/lib/backendApi';
 
 interface IntentFormProps {
@@ -20,6 +20,8 @@ interface IntentFormProps {
   onReset: () => void;
   isGenerating: boolean;
 }
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 
 export function IntentFormPanel({
   form,
@@ -32,6 +34,14 @@ export function IntentFormPanel({
   const [policy, setPolicy] = useState<AgentPolicy | null>(null);
   const [isLoadingPolicy, setIsLoadingPolicy] = useState(true);
   const [isSavingPolicy, setIsSavingPolicy] = useState(false);
+  const didInitAllowAll = useRef(false);
+
+  const normalizeCategory = (value: string) => value.trim().toLowerCase();
+
+  const formatCategoryLabel = (value: string) =>
+    value
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
 
   // Load current policy from backend
   useEffect(() => {
@@ -39,11 +49,10 @@ export function IntentFormPanel({
       try {
         const data = await getPolicy();
         setPolicy(data.policy);
-        // Sync form with policy
         onChange({
           ...form,
           maxSpend: data.policy.maxSpend,
-          allowedCategories: data.policy.allowedCategories,
+          allowedCategories: data.policy.allowedCategories.map(normalizeCategory),
           agentEnabled: data.policy.agentEnabled,
         });
       } catch (e) {
@@ -52,25 +61,23 @@ export function IntentFormPanel({
         setIsLoadingPolicy(false);
       }
     };
-    
+
     loadPolicy();
   }, []);
 
-  // Save policy to backend when it changes
   const handlePolicyChange = async (updates: Partial<AgentPolicy>) => {
     if (!policy) return;
-    
+
     const newPolicy = { ...policy, ...updates };
     setPolicy(newPolicy);
-    
-    // Sync form with policy
+
     onChange({
       ...form,
       maxSpend: newPolicy.maxSpend,
       allowedCategories: newPolicy.allowedCategories,
       agentEnabled: newPolicy.agentEnabled,
     });
-    
+
     setIsSavingPolicy(true);
     try {
       await updatePolicy(updates);
@@ -81,17 +88,60 @@ export function IntentFormPanel({
     }
   };
 
+  const { data: products } = useQuery<Product[]>({
+    queryKey: ['shopify-products-categories'],
+    queryFn: async (): Promise<Product[]> => {
+      const response = await fetch(`${API_BASE}/api/shopify/products/search`);
+      if (!response.ok) {
+        throw new Error('Failed to load products');
+      }
+      return response.json();
+    },
+  });
+
+  const availableCategories = useMemo(() => {
+    const set = new Set(
+      (products ?? [])
+        .map((product) => String(product.productType || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
+    return Array.from(set).sort();
+  }, [products]);
+
+  const [allowAll, setAllowAll] = useState(false);
+
+  useEffect(() => {
+    const isAll =
+      form.allowedCategories.length > 0 &&
+      form.allowedCategories.length === availableCategories.length &&
+      form.allowedCategories.every((c) => availableCategories.includes(c));
+    setAllowAll(isAll);
+  }, [form.allowedCategories, availableCategories]);
+
+  useEffect(() => {
+    if (!policy || availableCategories.length === 0 || didInitAllowAll.current) return;
+    const normalized = form.allowedCategories.map(normalizeCategory);
+    const legacyDefaults = new Set(['office', 'electronics']);
+    const isLegacyDefault = normalized.length > 0 && normalized.every((c) => legacyDefaults.has(c));
+    if (normalized.length === 0 || isLegacyDefault) {
+      setAllowAll(true);
+      handlePolicyChange({ allowedCategories: availableCategories });
+    }
+    didInitAllowAll.current = true;
+  }, [availableCategories]);
+
   const updateField = <K extends keyof IntentForm>(key: K, value: IntentForm[K]) => {
     onChange({ ...form, [key]: value });
   };
 
   const toggleCategory = (category: string) => {
+    if (!policy) return;
+    if (allowAll) return;
     const current = form.allowedCategories;
-    if (current.includes(category)) {
-      updateField('allowedCategories', current.filter(c => c !== category));
-    } else {
-      updateField('allowedCategories', [...current, category]);
-    }
+    const next = current.includes(category)
+      ? current.filter((c) => c !== category)
+      : [...current, category];
+    handlePolicyChange({ allowedCategories: next });
   };
 
   const addBrand = () => {
@@ -103,11 +153,35 @@ export function IntentFormPanel({
   };
 
   const removeBrand = (brand: string) => {
-    updateField('brandPreferences', form.brandPreferences.filter(b => b !== brand));
+    updateField('brandPreferences', form.brandPreferences.filter((b) => b !== brand));
   };
 
-  const isValid = form.maxSpend > 0 && form.allowedCategories.length > 0 && form.agentEnabled;
+  const isValid =
+    form.maxSpend > 0 &&
+    form.allowedCategories.length > 0 &&
+    form.shoppingIntent.trim().length > 0 &&
+    form.agentEnabled;
   const canGenerate = isValid && !isGenerating;
+
+  const handleAllowAllChange = (checked: boolean) => {
+    setAllowAll(checked);
+    if (!policy) return;
+    const nextCategories = checked ? availableCategories : [];
+    handlePolicyChange({ allowedCategories: nextCategories });
+  };
+
+  useEffect(() => {
+    if (!policy || availableCategories.length === 0) return;
+    if (form.allowedCategories.length === 0) {
+      setAllowAll(true);
+      handlePolicyChange({ allowedCategories: availableCategories });
+    }
+  }, [availableCategories]);
+
+  const handleReset = () => {
+    onReset();
+    setBrandInput('');
+  };
 
   return (
     <Card>
@@ -132,6 +206,11 @@ export function IntentFormPanel({
             onChange={(e) => updateField('shoppingIntent', e.target.value)}
             rows={3}
           />
+          {form.shoppingIntent.trim().length === 0 && (
+            <p className="text-xs text-destructive flex items-center gap-1">
+              <AlertCircle className="h-3 w-3" /> This field is required
+            </p>
+          )}
         </div>
 
         {/* Budget */}
@@ -165,39 +244,47 @@ export function IntentFormPanel({
 
         {/* Allowed Categories */}
         <div className="space-y-2">
-          <Label>
-            Allowed Categories
-            {isSavingPolicy && <Loader2 className="h-3 w-3 animate-spin inline ml-2" />}
-          </Label>
+          <div className="flex items-center justify-between">
+            <Label>
+              Allowed Categories
+              {isSavingPolicy && <Loader2 className="h-3 w-3 animate-spin inline ml-2" />}
+            </Label>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="allow-all" className="text-sm">
+                Allow All
+              </Label>
+              <Switch id="allow-all" checked={allowAll} onCheckedChange={handleAllowAllChange} />
+            </div>
+          </div>
           {isLoadingPolicy ? (
             <div className="flex items-center gap-2 text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {AVAILABLE_CATEGORIES.map(category => (
-                <button
-                  key={category}
-                  type="button"
-                  onClick={() => {
-                    const current = policy?.allowedCategories || [];
-                    const newCategories = current.includes(category)
-                      ? current.filter(c => c !== category)
-                      : [...current, category];
-                    handlePolicyChange({ allowedCategories: newCategories });
-                  }}
-                  className={`px-3 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${
-                    policy?.allowedCategories.includes(category)
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                  }`}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
+            !allowAll && (
+              <div className="flex flex-wrap gap-2">
+                {availableCategories.map((category) => {
+                  const isSelected = form.allowedCategories.includes(category);
+                  return (
+                    <button
+                      key={category}
+                      type="button"
+                      onClick={() => toggleCategory(category)}
+                      disabled={allowAll}
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${
+                        isSelected
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      } ${allowAll ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      {formatCategoryLabel(category)}
+                    </button>
+                  );
+                })}
+              </div>
+            )
           )}
-          {policy?.allowedCategories.length === 0 && (
+          {form.allowedCategories.length === 0 && !allowAll && (
             <p className="text-xs text-destructive flex items-center gap-1">
               <AlertCircle className="h-3 w-3" /> Select at least one category
             </p>
@@ -226,7 +313,7 @@ export function IntentFormPanel({
 
           {form.brandPreferences.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-2">
-              {form.brandPreferences.map(brand => (
+              {form.brandPreferences.map((brand) => (
                 <Badge key={brand} variant="secondary" className="gap-1">
                   {brand}
                   <button
@@ -272,7 +359,9 @@ export function IntentFormPanel({
         {/* Agent Enabled Toggle */}
         <div className="flex items-center justify-between p-4 rounded-lg bg-muted">
           <div className="space-y-0.5">
-            <Label htmlFor="agent-toggle" className="cursor-pointer">Agent Enabled</Label>
+            <Label htmlFor="agent-toggle" className="cursor-pointer">
+              Agent Enabled
+            </Label>
             <p className="text-xs text-muted-foreground">
               Allow Me-Agent to generate recommendations
             </p>
@@ -290,28 +379,21 @@ export function IntentFormPanel({
           {policy && (
             <>
               <PermissionChip label={`$${policy.maxSpend} max`} active />
-              <PermissionChip
-            label={`${policy.allowedCategories.length} categories`}
-            active={policy.allowedCategories.length > 0}
-          />
+              <PermissionChip label={`${policy.allowedCategories.length} categories`} active={policy.allowedCategories.length > 0} />
               <PermissionChip label="Agent" active={policy.agentEnabled} />
             </>
           )}
         </div>
 
         {/* Actions */}
-        <div className="flex gap-3 pt-2">
-          <Button
-            onClick={onGenerate}
-            disabled={!canGenerate}
-            className="flex-1"
-          >
+        <div className="flex flex-col gap-3 pt-2">
+          <Button onClick={onGenerate} disabled={!canGenerate} className="w-full">
             <Sparkles className="h-4 w-4 mr-2" />
             {isGenerating ? 'Generating...' : 'Generate Recommendations'}
           </Button>
-
-          <Button variant="outline" onClick={onReset}>
-            <RotateCcw className="h-4 w-4" />
+          <Button variant="secondary" onClick={handleReset} className="w-full">
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reset to default settings
           </Button>
         </div>
 

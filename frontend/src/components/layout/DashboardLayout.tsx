@@ -1,11 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Shield, Home, Settings, FileText, Menu, X } from 'lucide-react';
+import { Crown, Bot, FileText, Menu, X, Store, ShoppingCart, Shield } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
 const navItems = [
-  { path: '/demo', label: 'Demo', icon: Home },
-  { path: '/settings', label: 'Settings', icon: Settings },
+  { path: '/shop', label: 'Shop', icon: Store },
+  { path: '/demo', label: 'Me-Agent', icon: Bot },
+  { path: '/checkout', label: 'Checkout', icon: ShoppingCart },
   { path: '/audit', label: 'Audit Log', icon: FileText },
 ];
 
@@ -14,7 +15,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gray-900">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="container mx-auto px-4">
@@ -22,7 +23,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-                <Shield className="h-5 w-5 text-primary-foreground" />
+                <Crown className="h-5 w-5 text-primary-foreground" />
               </div>
               <span className="text-lg font-semibold">Me-Agent</span>
             </Link>

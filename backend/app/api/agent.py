@@ -34,6 +34,8 @@ from backboard import BackboardClient
 from backboard.exceptions import BackboardNotFoundError, BackboardAPIError
 
 from app.core.config import get_settings
+from app.schemas.bundle import BundleRequest, BundleItem, BundleResult
+from app.api.shopify import PRODUCTS, PURCHASE_HISTORY
 
 
 # ============================================================
@@ -116,6 +118,98 @@ class RecommendationRequest(BaseModel):
     agentEnabled: Optional[bool] = True
 
 
+@router.post("/bundle", response_model=BundleResult)
+def generate_bundle(payload: BundleRequest) -> BundleResult:
+	if not payload.agentEnabled:
+		return BundleResult(items=[], subtotal=0.0, currency="USD")
+
+	persona_id = payload.personaId or "alex"
+	past_purchases = PURCHASE_HISTORY.get(persona_id, [])
+	past_vendors = {_normalize(p.vendor) for p in past_purchases}
+	past_products = {p.productId for p in past_purchases}
+	brand_prefs = {_normalize(b) for b in payload.brandPreferences}
+	cart_quantities = {item.id: item.qty for item in (payload.cartItems or [])}
+
+	allowed_categories = {_normalize(c) for c in payload.allowedCategories}
+	def remaining_stock(product) -> int:
+		return max((product.stockQuantity or 0) - cart_quantities.get(product.id, 0), 0)
+
+	available = [
+		p
+		for p in PRODUCTS
+		if _normalize(p.productType) in allowed_categories and remaining_stock(p) > 0
+	]
+
+	def score_product(product) -> tuple:
+		vendor_norm = _normalize(product.vendor)
+		brand_pref = vendor_norm in brand_prefs or any(
+			pref in vendor_norm or pref in _normalize(product.title) for pref in brand_prefs
+		)
+		past_brand = vendor_norm in past_vendors
+		past_item = product.id in past_products
+		score = 0
+		if brand_pref:
+			score += 3
+		if past_brand:
+			score += 2
+		if past_item:
+			score += 1
+		price = product.variants[0].price
+		return (-score, price, product.id)
+
+	sorted_candidates = sorted(available, key=score_product)
+	sorted_by_price = sorted(available, key=lambda p: (p.variants[0].price, p.id))
+
+	selected_items: List[BundleItem] = []
+	subtotal = 0.0
+
+	def add_product(product) -> bool:
+		nonlocal subtotal
+		price = product.variants[0].price
+		if subtotal + price > payload.maxSpend:
+			return False
+		vendor_norm = _normalize(product.vendor)
+		brand_pref = vendor_norm in brand_prefs or any(
+			pref in vendor_norm or pref in _normalize(product.title) for pref in brand_prefs
+		)
+		past_brand = vendor_norm in past_vendors
+		past_item = product.id in past_products
+		reason_tags = _build_reason_tags(
+			base_tags=["Matches category", "Within budget"],
+			brand_pref=brand_pref,
+			past_brand=past_brand,
+			past_item=past_item,
+		)
+		selected_items.append(
+			BundleItem(
+				id=product.id,
+				title=product.title,
+				price=price,
+				category=product.productType,
+				merchant=product.vendor,
+				reasonTags=reason_tags,
+				qty=1,
+				stockQuantity=product.stockQuantity,
+				imageUrl=product.images[0] if product.images else None,
+			)
+		)
+		subtotal = round(subtotal + price, 2)
+		return True
+
+	for product in sorted_candidates:
+		if len(selected_items) >= 6:
+			break
+		add_product(product)
+
+	if len(selected_items) < 3:
+		for product in sorted_by_price:
+			if len(selected_items) >= 3:
+				break
+			if any(item.id == product.id for item in selected_items):
+				continue
+			add_product(product)
+
+	return BundleResult(items=selected_items, subtotal=subtotal, currency="USD")
 class FeedbackRequest(BaseModel):
     user_id: str
     rejected_items: list[str]
@@ -203,6 +297,40 @@ def _db_insert_correction(user_id: str, rejected: list[str], kept: list[str], re
 # ============================================================
 def _norm(s: Optional[str]) -> str:
     return (s or "").strip().lower()
+
+
+def _normalize(s: Optional[str]) -> str:
+    return _norm(s)
+
+
+def _build_reason_tags(
+    base_tags: list[str],
+    brand_pref: bool,
+    past_brand: bool,
+    past_item: bool,
+) -> list[str]:
+    tags: list[str] = []
+    seen: set[str] = set()
+
+    def add(tag: str) -> None:
+        if not tag:
+            return
+        if tag in seen:
+            return
+        seen.add(tag)
+        tags.append(tag)
+
+    for tag in base_tags:
+        add(tag)
+
+    if brand_pref:
+        add("Preferred brand")
+    if past_brand:
+        add("Previously purchased brand")
+    if past_item:
+        add("Previously purchased item")
+
+    return tags
 
 
 def _normalize_user_id(req: RecommendationRequest) -> str:
@@ -384,6 +512,9 @@ def _filter_inventory_by_allowed_categories(products: list[Product], allowed_cat
     filtered: list[Product] = []
     for p in products:
         tagset = set(_norm(t) for t in (p.tags or []))
+        type_tag = _norm(getattr(p, "productType", None))
+        if type_tag:
+            tagset.add(type_tag)
         if tagset.intersection(allowed_set):
             filtered.append(p)
 
@@ -593,6 +724,20 @@ async def recommend(req: RecommendationRequest):
     kept_item_counts = memory_payload.get("kept_items", {}) or {}
     top_kept = [k for k, _ in sorted(kept_item_counts.items(), key=lambda kv: kv[1], reverse=True)[:8]]
 
+    if not inventory_filtered:
+        empty = {
+            "items": [],
+            "total": 0.0,
+            "notes": "No items match the selected categories. Try different categories or broaden your selection.",
+        }
+        return JSONResponse(
+            content={
+                "cart": json.dumps(empty),
+                "explanation": "No relevant items were available for the selected categories.",
+            }
+        )
+
+    # Create Backboard thread
     try:
         thread = await client.create_thread(assistant_id)
     except BackboardAPIError as e:

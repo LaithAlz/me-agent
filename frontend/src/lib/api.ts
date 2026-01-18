@@ -1,9 +1,9 @@
-// Me-Agent API Client (Vite)
-// - Calls FastAPI: /recommend and /feedback
+// Me-Agent API Client
+// - Calls FastAPI: /recommend, /feedback, and /agent/bundle
 // - Adapts backend cart JSON into your UI BundleResult shape
 // - Keeps passkey demo helpers and Shopify helpers
 
-import type { BundleResult, ExplainResult, IntentForm } from '@/types'
+import type { BundleResult, ExplainResult, IntentForm, CartItem } from '@/types'
 
 import {
   isPlatformAuthenticatorAvailable,
@@ -134,6 +134,22 @@ function safeJsonParse<T>(s: string): T | null {
   }
 }
 
+export async function generateBundle(
+  payload: IntentForm & { cartItems?: CartItem[] }
+): Promise<BundleResult> {
+  await delay(1200)
+
+  const cartItems = (payload.cartItems ?? []).map(item => ({
+    id: item.id,
+    qty: item.qty,
+  }))
+
+  return apiRequest<BundleResult>('/api/agent/bundle', {
+    method: 'POST',
+    body: JSON.stringify({ ...payload, personaId: 'alex', cartItems }),
+  })
+}
+
 type BackendCart = {
   items?: Array<{
     name?: string
@@ -162,6 +178,7 @@ function adaptCartToBundle(cartJson: string): BundleResult {
     const price = Number(it.price ?? 0)
     const qty = Number(it.qty ?? 1)
     const reasonTags = Array.isArray(it.tags) ? it.tags : []
+    const category = String((it as any).category ?? 'office')
 
     const id =
       (typeof it.id === 'string' && it.id.length ? it.id : null) ??
@@ -174,6 +191,7 @@ function adaptCartToBundle(cartJson: string): BundleResult {
       merchant,
       price,
       qty,
+      category,
       reasonTags,
       // Optional fields your app may later use
       merchandiseId: it.merchandiseId,
@@ -265,14 +283,6 @@ export async function generateBundleWithExplain(
   const bundle = adaptCartToBundle(resp.cart)
 
   return { bundle, explanation: resp.explanation }
-}
-
-// Keep the old signature available if other parts still call it
-export async function generateBundle(
-  payload: IntentForm & { userId: string; products: Product[] }
-): Promise<BundleResult> {
-  const { bundle } = await generateBundleWithExplain(payload)
-  return bundle
 }
 
 export async function sendFeedback(payload: FeedbackRequest): Promise<FeedbackResponse> {
