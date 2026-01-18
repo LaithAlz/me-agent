@@ -87,7 +87,7 @@ _DEFAULT_PRODUCTS: List[Product] = [
 		id="gid://shopify/Product/3003",
 		title="Laptop Stand",
 		vendor="TechVendor",
-		productType="accessories",
+		productType="Accessories",
 		tags=["laptop", "ergonomic"],
 		images=["https://upload.wikimedia.org/wikipedia/commons/5/51/Dell_laptop_on_a_stand_in_a_museum.jpg"],
 		variants=[ProductVariant(id="gid://shopify/ProductVariant/4003", title="Default", price=49.99)],
