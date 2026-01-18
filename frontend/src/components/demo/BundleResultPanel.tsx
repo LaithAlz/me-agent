@@ -107,9 +107,12 @@ function BundleItemRow({
   return (
     <div className="py-4 first:pt-0 last:pb-0">
       <div className="flex gap-3">
-        {/* Image placeholder */}
-        <div className="h-16 w-16 rounded-lg bg-muted flex items-center justify-center shrink-0">
-          <Package className="h-6 w-6 text-muted-foreground" />
+        <div className="h-16 w-16 rounded-lg bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden">
+          <img
+            src={item.imageUrl ?? 'https://placehold.co/128x128?text=Product'}
+            alt={item.title}
+            className="max-h-full max-w-full object-contain object-center"
+          />
         </div>
 
         <div className="flex-1 min-w-0">

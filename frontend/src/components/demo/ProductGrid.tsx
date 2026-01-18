@@ -26,11 +26,11 @@ interface ProductCardProps {
 function ProductCard({ product, onAddToCart }: ProductCardProps) {
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-      <div className="aspect-w-16 aspect-h-9">
+      <div className="h-48 w-full bg-muted/40 flex items-center justify-center overflow-hidden">
         <img
           src={product.imageUrl}
           alt={product.title}
-          className="w-full h-48 object-cover"
+          className="max-h-full max-w-full object-contain object-center"
         />
       </div>
       <div className="p-4">

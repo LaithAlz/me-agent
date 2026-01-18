@@ -101,11 +101,13 @@ export default function CheckoutPage() {
               <div className="space-y-4">
                 {items.map(item => (
                   <div key={item.id} className="flex items-center gap-4 border-b pb-4 last:border-b-0">
-                    <img
-                      src={item.imageUrl ?? 'https://placehold.co/120x80?text=Product'}
-                      alt={item.title}
-                      className="h-20 w-28 rounded object-cover"
-                    />
+                    <div className="h-20 w-28 rounded bg-muted/40 overflow-hidden flex items-center justify-center">
+                      <img
+                        src={item.imageUrl ?? 'https://placehold.co/120x80?text=Product'}
+                        alt={item.title}
+                        className="max-h-full max-w-full object-contain object-center"
+                      />
+                    </div>
                     <div className="flex-1">
                       <p className="font-semibold">{item.title}</p>
                       <p className="text-sm text-muted-foreground">${item.price.toFixed(2)}</p>
