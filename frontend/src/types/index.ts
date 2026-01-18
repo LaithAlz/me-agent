@@ -26,16 +26,17 @@ export interface CartItem {
 }
 
 export interface PermissionPolicy {
-  maxSpend: number;
+  maxSpend: number; // in CAD
   allowedCategories: string[];
   agentEnabled: boolean;
   merchantId?: string;
+  requireConfirm?: boolean; // Require user confirmation for checkout
 }
 
 export interface BundleItem {
   id: string;
   title: string;
-  price: number;
+  price: number; // in CAD
   category: string;
   merchant: string;
   reasonTags: string[];
@@ -46,8 +47,8 @@ export interface BundleItem {
 
 export interface BundleResult {
   items: BundleItem[];
-  subtotal: number;
-  currency: string;
+  subtotal: number; // in CAD
+  currency: 'CAD';
 }
 
 export interface AuditEvent {
@@ -63,6 +64,8 @@ export type AuditAction =
   | 'CONSENT_GRANTED'
   | 'CONSENT_DENIED'
   | 'BUNDLE_GENERATED'
+  | 'AUTHORITY_BLOCKED'
+  | 'FEEDBACK_SUBMITTED'
   | 'CART_CREATED'
   | 'CART_LINES_ADDED'
   | 'CHECKOUT_LINK_READY'
@@ -92,26 +95,31 @@ export interface IntentForm {
 }
 
 export const AVAILABLE_CATEGORIES = [
-  'office',
-  'electronics',
-  'clothing',
-  'home',
-  'sports',
+  'accessories',
   'books',
-  'beauty',
-  'food',
+  'construction',
+  'electronics',
+  'entertainment',
+  'fashion',
+  'fitness',
+  'grocery',
+  'home',
+  'lifestyle',
+  'office',
+  'smart_home',
+  'wellness',
 ] as const;
 
 export const DEFAULT_PERMISSION_POLICY: PermissionPolicy = {
   maxSpend: 150,
-  allowedCategories: ['office'],
+  allowedCategories: [...AVAILABLE_CATEGORIES],
   agentEnabled: true,
 };
 
 export const DEFAULT_INTENT_FORM: IntentForm = {
   shoppingIntent: '',
   maxSpend: 150,
-  allowedCategories: ['office'],
+  allowedCategories: [...AVAILABLE_CATEGORIES],
   brandPreferences: [],
   priceSensitivity: 3,
   agentEnabled: true,

@@ -16,7 +16,7 @@ export function CartPanel({
   onAddBundle,
   onOpenCheckout,
 }: CartPanelProps) {
-  const hasBundle = bundle && bundle.items.length > 0;
+  const hasBundle = Boolean(bundle && bundle.items.length > 0);
   const hasCart = cartCount > 0;
 
   return (
@@ -24,22 +24,15 @@ export function CartPanel({
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
           <ShoppingCart className="h-5 w-5 text-primary" />
-          Cart + Checkout
+          Cart and Checkout
         </CardTitle>
       </CardHeader>
+
       <CardContent className="space-y-4">
         {/* Status indicators */}
         <div className="space-y-2">
-          <StatusRow 
-            label="Bundle ready" 
-            completed={!!hasBundle} 
-            active={!!hasBundle}
-          />
-          <StatusRow 
-            label="Items in checkout" 
-            completed={hasCart} 
-            active={hasCart}
-          />
+          <StatusRow label="Recommendations ready" completed={hasBundle} active={hasBundle} />
+          <StatusRow label="Items in checkout" completed={hasCart} active={hasCart} />
         </div>
 
         {/* Action buttons */}
@@ -54,11 +47,7 @@ export function CartPanel({
             Add bundle to checkout
           </Button>
 
-          <Button
-            className="w-full justify-start"
-            disabled={!hasCart}
-            onClick={onOpenCheckout}
-          >
+          <Button className="w-full justify-start" disabled={!hasCart} onClick={onOpenCheckout}>
             <ExternalLink className="h-4 w-4 mr-2" />
             Go to Checkout
           </Button>
@@ -76,32 +65,26 @@ export function CartPanel({
   );
 }
 
-function StatusRow({ 
-  label, 
-  completed, 
-  active 
-}: { 
-  label: string; 
-  completed: boolean; 
+function StatusRow({
+  label,
+  completed,
+  active,
+}: {
+  label: string;
+  completed: boolean;
   active: boolean;
 }) {
   return (
     <div className="flex items-center gap-2 text-sm">
-      <div 
+      <div
         className={`h-2 w-2 rounded-full ${
-          completed 
-            ? 'bg-verified' 
-            : active 
-              ? 'bg-warning' 
-              : 'bg-muted'
-        }`} 
+          completed ? 'bg-verified' : active ? 'bg-warning' : 'bg-muted'
+        }`}
       />
       <span className={completed ? 'text-foreground' : 'text-muted-foreground'}>
         {label}
       </span>
-      {completed && (
-        <span className="text-xs text-verified ml-auto">✓</span>
-      )}
+      {completed && <span className="text-xs text-verified ml-auto">✓</span>}
     </div>
   );
 }
