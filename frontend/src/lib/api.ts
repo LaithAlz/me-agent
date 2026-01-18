@@ -5,6 +5,12 @@
 
 import type { BundleResult, ExplainResult, IntentForm } from '@/types'
 
+import {
+  isPlatformAuthenticatorAvailable,
+  authorizeActionWithPasskey,
+  isWebAuthnSupported,
+} from './webauthn'
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 
 // Simulated delay for realistic UX
@@ -36,8 +42,30 @@ export function setPasskeyDemoMode(willSucceed: boolean) {
   passkeyWillSucceed = willSucceed
 }
 
+/**
+ * Authorize with passkey - uses real WebAuthn when available
+ * Falls back to demo mode for unsupported devices
+ */
 export async function authorizePasskey(): Promise<{ success: boolean; error?: string }> {
-  await delay(1500)
+  // Try real WebAuthn first
+  try {
+    if (isWebAuthnSupported()) {
+      const hasPlatformAuth = await isPlatformAuthenticatorAvailable()
+
+      if (hasPlatformAuth) {
+        // Use real biometric authentication
+        const result = await authorizeActionWithPasskey('generateBundle')
+        return { success: result.success, error: result.error }
+      }
+    }
+  } catch (e) {
+    // If WebAuthn fails for any reason, fall back to demo mode
+    console.warn('WebAuthn failed, falling back to demo mode:', e)
+  }
+
+  // Fallback to demo mode
+  await delay(1500) // Simulate biometric check
+
   if (passkeyWillSucceed) return { success: true }
   return { success: false, error: 'Passkey verification failed. Please try again.' }
 }
@@ -161,7 +189,7 @@ function adaptCartToBundle(cartJson: string): BundleResult {
     // Your UI expects these keys
     items,
     subtotal,
-    currency: 'USD',
+    currency: 'CAD',
     // If your BundleResult type has extra required fields, add them here
   } as BundleResult
 

@@ -66,7 +66,7 @@ async def check_authority(
     # ============================================================
     elif request.cartTotal is not None and request.cartTotal > policy.maxSpend:
         decision = "BLOCK"
-        reason = f"Cart total ${request.cartTotal:.2f} exceeds your spending limit of ${policy.maxSpend:.2f}. Reduce items or increase your limit."
+        reason = f"Cart total CAD ${request.cartTotal:.2f} exceeds your spending limit of CAD ${policy.maxSpend:.2f}. Reduce items or increase your limit."
     
     # ============================================================
     # Rule 3: Check categories

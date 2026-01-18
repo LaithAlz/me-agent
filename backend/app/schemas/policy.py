@@ -10,8 +10,9 @@ class AgentPolicy(BaseModel):
     """
     Defines what the agent is allowed to do on behalf of the user.
     This is the core of the "Authority" layer.
+    All monetary values are in Canadian dollars (CAD).
     """
-    maxSpend: float = Field(default=150.0, ge=0, description="Maximum spend limit in USD")
+    maxSpend: float = Field(default=150.0, ge=0, description="Maximum spend limit in CAD (Canadian dollars)")
     allowedCategories: List[str] = Field(default=["office"], description="Categories agent can recommend from")
     agentEnabled: bool = Field(default=True, description="Whether the agent is enabled at all")
     requireConfirm: bool = Field(default=True, description="Require user confirmation for checkout")

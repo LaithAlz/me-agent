@@ -112,6 +112,7 @@ export default function DemoPage() {
 
   const [showVoiceExplainer, setShowVoiceExplainer] = useState(false)
   const [voiceExplanation, setVoiceExplanation] = useState<string | null>(null)
+  const [blockedItems, setBlockedItems] = useState<string[]>([])
 
   const { addEvent, getRecentEvents } = useAuditLog()
 
@@ -156,11 +157,13 @@ export default function DemoPage() {
 
     if (!result.success) {
       setPasskeyState('failed')
+      setShowVoiceExplainer(false)
       addEvent('CONSENT_DENIED', result.error || 'Passkey verification failed', {})
       return
     }
 
     setPasskeyState('success')
+    setShowVoiceExplainer(true)
 
     // Optional authority check
     try {
@@ -173,12 +176,12 @@ export default function DemoPage() {
 
       if (authorityCheck.decision === 'BLOCK') {
         setPasskeyState('failed')
+        setShowVoiceExplainer(false)
         addEvent('AUTHORITY_BLOCKED', authorityCheck.reason, {
           maxSpend: (intentForm as any).maxSpend,
           allowedCategories: (intentForm as any).allowedCategories,
         })
         setVoiceExplanation(authorityCheck.reason)
-        setShowVoiceExplainer(true)
         toast({
           title: 'Action blocked by policy',
           description: authorityCheck.reason,
@@ -250,6 +253,7 @@ export default function DemoPage() {
   const handlePasskeyCancel = useCallback(() => {
     setShowPasskeyModal(false)
     setPasskeyState('idle')
+    setShowVoiceExplainer(false)
   }, [])
 
   const handlePasskeyRetry = useCallback(() => {
@@ -262,6 +266,7 @@ export default function DemoPage() {
     setRawExplanation(null)
     setExplanation(null)
     setCart({ cartId: null, checkoutUrl: null, isCreating: false, isAddingLines: false })
+    setShowVoiceExplainer(false)
   }, [])
 
   const handleUpdateQuantity = useCallback((itemId: string, delta: number) => {
