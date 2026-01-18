@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     
     print("MONGO_URI set?", bool(settings.MONGO_URI))
-    print("MONGODB_DB_NAME:", settings.MONGODB_DB_NAME)
+    print("MONGODB_DB_NAME:", settings.MONGO_DB_NAME)
 
     # Initialize database
     using_mongo = await init_db()
