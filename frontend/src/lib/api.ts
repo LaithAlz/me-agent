@@ -11,7 +11,7 @@ import {
   isWebAuthnSupported,
 } from './webauthn'
 
-const API_BASE = process.env.VITE_API_BASE_URL
+const API_BASE = process.env.VITE_API_BASE_URL || 'https://me-agent.onrender.com';
 
 // Simulated delay for realistic UX
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))

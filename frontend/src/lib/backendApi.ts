@@ -3,7 +3,7 @@
  * Connects to the FastAPI backend for authority, policy, audit, and voice features.
  */
 
-const API_BASE = process.env.VITE_API_BASE_URL;
+const API_BASE = process.env.VITE_API_BASE_URL || 'https://me-agent.onrender.com';
 
 // ============================================================
 // Types
