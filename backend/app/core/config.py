@@ -2,13 +2,22 @@
 Me-Agent Configuration
 Loads environment variables and provides app-wide settings.
 """
-import os
-from pydantic_settings import BaseSettings
-from typing import Optional
+from __future__ import annotations
+
 from functools import lru_cache
+from typing import Optional
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    # Pydantic v2 settings configuration
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
     # App settings
     APP_NAME: str = "Me-Agent"
     DEBUG: bool = True
@@ -17,25 +26,28 @@ class Settings(BaseSettings):
     # Currency
     DEFAULT_CURRENCY: str = "CAD"
     
+    # 1Password integration
+    BACKBOARD_API_KEY: Optional[str] = None
+
     # MongoDB
-    MONGODB_URI: Optional[str] = None
+    MONGO_URI: Optional[str] = None
     MONGODB_DB_NAME: str = "meagent"
-    
+
     # ElevenLabs Voice API
     ELEVENLABS_API_KEY: Optional[str] = None
-    ELEVENLABS_VOICE_ID: str = "21m00Tcm4TlvDq8ikWAM"  # Default: Rachel
-    
+    ELEVENLABS_VOICE_ID: str = "21m00Tcm4TlvDq8ikWAM"
+
     # Google Gemini API (for avatar generation)
     GOOGLE_GENERATIVE_AI_API_KEY: Optional[str] = None
-    
+
     # WebAuthn settings
     WEBAUTHN_RP_ID: str = "localhost"
     WEBAUTHN_RP_NAME: str = "Me-Agent"
     WEBAUTHN_ORIGIN: str = "http://localhost:5173"
-    
-    # Demo mode (use simulated passkey if WebAuthn not fully supported)
+
+    # Demo mode
     DEMO_MODE: bool = True
-    
+
     # CORS
     CORS_ORIGINS: list[str] = [
         "http://localhost:5173",
@@ -43,12 +55,11 @@ class Settings(BaseSettings):
         "http://localhost:8080",
         "http://127.0.0.1:8080"
     ]
-    
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
 
 
 @lru_cache()
 def get_settings() -> Settings:
+    import os
+    print("CWD:", os.getcwd())
+    print(".env exists in CWD?", os.path.exists(".env"))
     return Settings()
