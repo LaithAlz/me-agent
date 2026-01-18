@@ -210,7 +210,7 @@ _DEFAULT_PRODUCTS: List[Product] = [
 		productType="Grocery",
 		tags=["food", "convenience", "snacks"],
 		images=["https://upload.wikimedia.org/wikipedia/commons/1/16/Boxes_of_instant_noodles_on_a_supermarket_shelf%2C_with_the_words_%22First_In_First_Out_-_Retain_Freshness%22_written_on_them.jpg"],
-		variants=[ProductVariant(id="gid://shopify/ProductVariant/4015", title="Default", price=29.99)],
+		variants=[ProductVariant(id="gid://shopify/ProductVariant/4015", title="Default", price=9.99)],
 		inStock=True,
 	),
 	Product(
