@@ -226,7 +226,7 @@ export async function cloneVoice(audioFile: File): Promise<{ success: boolean; v
 }
 
 export async function useVoiceId(voiceId: string): Promise<{ success: boolean; voiceId?: string; error?: string }> {
-  const response = await fetch(`${API_BASE}/voice/use`, {
+  const response = await fetch(`${API_BASE}/api/voice/use`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -281,7 +281,7 @@ export async function deleteAvatar(): Promise<{ success: boolean }> {
 
 export async function checkBackendHealth(): Promise<boolean> {
   try {
-    const response = await fetch(`${API_BASE}/health`);
+    const response = await fetch(`${API_BASE}/api/health`);
     return response.ok;
   } catch {
     return false;
