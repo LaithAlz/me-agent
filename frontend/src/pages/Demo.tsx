@@ -7,6 +7,7 @@ import { CartPanel } from '@/components/demo/CartPanel';
 import { ExplainPanel } from '@/components/demo/ExplainPanel';
 import { AuditPreviewPanel } from '@/components/demo/AuditPreviewPanel';
 import { PasskeyConsentModal } from '@/components/demo/PasskeyConsentModal';
+import { VoiceExplainer } from '@/components/VoiceExplainer';
 import { useAuditLog } from '@/hooks/useAuditLog';
 import {
   loadLastIntent,
@@ -17,21 +18,18 @@ import {
   saveLastBundle,
   loadLastExplanation,
   saveLastExplanation,
+  addCartItem,
+  loadCartItems,
 } from '@/lib/storage';
-import { authorizePasskey, generateBundle, explainBundle } from '@/lib/api';
-import type { 
-  IntentForm, 
-  BundleResult, 
-  ExplainResult,
-  CartItem,
-  PasskeyState 
-} from '@/types';
+import { authorizePasskey, generateBundle, explainBundle, sendFeedback } from '@/lib/api';
+import { checkAuthority } from '@/lib/backendApi';
+import type { IntentForm, BundleResult, ExplainResult, CartItem, PasskeyState } from '@/types';
 import { DEFAULT_INTENT_FORM } from '@/types';
 import { toast } from '@/hooks/use-toast';
-import { addCartItem, loadCartItems } from '@/lib/storage';
+
+const USER_ID = 'demo-user-1';
 
 export default function DemoPage() {
-  // Load persisted data on mount
   const [intentForm, setIntentForm] = useState<IntentForm>(() => loadLastIntent());
   const [bundle, setBundle] = useState<BundleResult | null>(() => loadLastBundle());
   const [cartItems, setCartItems] = useState<CartItem[]>(() => loadCartItems());
@@ -39,11 +37,16 @@ export default function DemoPage() {
   const [explanation, setExplanation] = useState<ExplainResult | null>(() => loadLastExplanation());
   const [isExplaining, setIsExplaining] = useState(false);
 
-  // Passkey modal state
   const [showPasskeyModal, setShowPasskeyModal] = useState(false);
   const [passkeyState, setPasskeyState] = useState<PasskeyState>('idle');
   const [isGenerating, setIsGenerating] = useState(false);
+
+  const [showVoiceExplainer, setShowVoiceExplainer] = useState(false);
+  const [voiceExplanation, setVoiceExplanation] = useState<string | null>(null);
+  const [blockedItems, setBlockedItems] = useState<string[]>([]);
+
   const navigate = useNavigate();
+  const { addEvent, getRecentEvents } = useAuditLog();
 
   const cartQuantities = useMemo(() => {
     return cartItems.reduce<Record<string, number>>((acc, item) => {
@@ -52,10 +55,6 @@ export default function DemoPage() {
     }, {});
   }, [cartItems]);
 
-  // Audit log
-  const { events, addEvent, getRecentEvents } = useAuditLog();
-
-  // Sync intent form to localStorage
   useEffect(() => {
     saveLastIntent(intentForm);
     const currentPolicy = loadPermissionPolicy();
@@ -75,17 +74,6 @@ export default function DemoPage() {
     saveLastExplanation(explanation);
   }, [explanation]);
 
-  // Sync with permission policy from settings
-  useEffect(() => {
-    const policy = loadPermissionPolicy();
-    setIntentForm(prev => ({
-      ...prev,
-      maxSpend: policy.maxSpend,
-      allowedCategories: policy.allowedCategories,
-      agentEnabled: policy.agentEnabled,
-    }));
-  }, []);
-
   const handleGenerate = useCallback(() => {
     setShowPasskeyModal(true);
     setPasskeyState('idle');
@@ -95,65 +83,106 @@ export default function DemoPage() {
     setPasskeyState('prompting');
 
     const result = await authorizePasskey();
+    if (!result.success) {
+      setPasskeyState('failed');
+      setShowVoiceExplainer(false);
+      addEvent('CONSENT_DENIED', result.error || 'Passkey verification failed', {});
+      return;
+    }
 
-    if (result.success) {
-      setPasskeyState('success');
-      
-      addEvent('CONSENT_GRANTED', 'User authorized bundle generation via passkey', {
-        maxSpend: intentForm.maxSpend,
-        allowedCategories: intentForm.allowedCategories,
-        agentEnabled: intentForm.agentEnabled,
+    setPasskeyState('success');
+    setShowVoiceExplainer(true);
+
+    try {
+      const authorityCheck = await checkAuthority({
+        action: 'recommendBundle',
+        cartTotal: 0,
+        categories: intentForm.allowedCategories,
+        meta: {
+          maxSpend: intentForm.maxSpend,
+          intent: intentForm.shoppingIntent,
+        },
       });
 
-      // Generate bundle after short success display
-      setTimeout(async () => {
-        setShowPasskeyModal(false);
-        setIsGenerating(true);
-        
-        try {
-          const currentCart = loadCartItems();
-          setCartItems(currentCart);
-          setCartCount(currentCart.reduce((sum, item) => sum + item.qty, 0));
-          const bundleResult = await generateBundle({
-            ...intentForm,
-            cartItems: currentCart,
-          });
-          setBundle(bundleResult);
-          setExplanation(null);
-          setCartCount(loadCartItems().reduce((sum, item) => sum + item.qty, 0));
-          
-          const bundleItemCount = bundleResult.items.reduce((sum, item) => sum + item.qty, 0);
-          addEvent('BUNDLE_GENERATED', `Generated ${bundleItemCount} items totaling $${bundleResult.subtotal.toFixed(2)}`, {
+      if (authorityCheck.decision === 'BLOCK') {
+        setPasskeyState('failed');
+        setShowVoiceExplainer(false);
+        setVoiceExplanation(authorityCheck.reason);
+        setBlockedItems(authorityCheck.blockedItems?.map((item) => item.id) ?? []);
+        addEvent('AUTHORITY_BLOCKED', authorityCheck.reason, {
+          maxSpend: intentForm.maxSpend,
+          allowedCategories: intentForm.allowedCategories,
+        });
+        toast({
+          title: 'Action blocked by policy',
+          description: authorityCheck.reason,
+          variant: 'destructive',
+        });
+        setTimeout(() => setShowPasskeyModal(false), 1500);
+        return;
+      }
+    } catch {
+      // If authority service is down, proceed with local validation
+    }
+
+    addEvent('CONSENT_GRANTED', 'User authorized bundle generation via passkey', {
+      maxSpend: intentForm.maxSpend,
+      allowedCategories: intentForm.allowedCategories,
+      agentEnabled: intentForm.agentEnabled,
+    });
+
+    setTimeout(async () => {
+      setShowPasskeyModal(false);
+      setIsGenerating(true);
+
+      try {
+        const currentCart = loadCartItems();
+        setCartItems(currentCart);
+        setCartCount(currentCart.reduce((sum, item) => sum + item.qty, 0));
+
+        const bundleResult = await generateBundle({
+          ...intentForm,
+          cartItems: currentCart,
+        });
+
+        setBundle(bundleResult);
+        setExplanation(null);
+        setBlockedItems([]);
+
+        const bundleItemCount = bundleResult.items.reduce((sum, item) => sum + item.qty, 0);
+        addEvent(
+          'BUNDLE_GENERATED',
+          `Generated ${bundleItemCount} items totaling $${bundleResult.subtotal.toFixed(2)}`,
+          {
             maxSpend: intentForm.maxSpend,
             allowedCategories: intentForm.allowedCategories,
-          }, {
+          },
+          {
             itemCount: bundleItemCount,
             subtotal: bundleResult.subtotal,
-          });
+          }
+        );
 
-          toast({
-            title: 'Bundle generated',
-            description: `${bundleItemCount} items recommended within your $${intentForm.maxSpend} budget`,
-          });
-        } catch (error) {
-          toast({
-            title: 'Generation failed',
-            description: 'Could not generate bundle. Please try again.',
-            variant: 'destructive',
-          });
-        } finally {
-          setIsGenerating(false);
-        }
-      }, 1000);
-    } else {
-      setPasskeyState('failed');
-      addEvent('CONSENT_DENIED', result.error || 'Passkey verification failed', {});
-    }
+        toast({
+          title: 'Bundle generated',
+          description: `${bundleItemCount} items recommended within your $${intentForm.maxSpend} budget`,
+        });
+      } catch (error) {
+        toast({
+          title: 'Generation failed',
+          description: 'Could not generate bundle. Please try again.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsGenerating(false);
+      }
+    }, 1000);
   }, [intentForm, addEvent]);
 
   const handlePasskeyCancel = useCallback(() => {
     setShowPasskeyModal(false);
     setPasskeyState('idle');
+    setShowVoiceExplainer(false);
   }, []);
 
   const handlePasskeyRetry = useCallback(() => {
@@ -164,6 +193,10 @@ export default function DemoPage() {
     setIntentForm(DEFAULT_INTENT_FORM);
     setBundle(null);
     setExplanation(null);
+    setShowVoiceExplainer(false);
+    setVoiceExplanation(null);
+    setBlockedItems([]);
+
     const currentCart = loadCartItems();
     setCartItems(currentCart);
     setCartCount(currentCart.reduce((sum, item) => sum + item.qty, 0));
@@ -171,31 +204,54 @@ export default function DemoPage() {
 
   const handleUpdateQuantity = useCallback((itemId: string, delta: number) => {
     if (!bundle) return;
-    
-    setBundle(prev => {
+
+    setBundle((prev) => {
       if (!prev) return prev;
-      const items = prev.items.map(item => {
+      const items = prev.items.map((item) => {
         if (item.id !== itemId) return item;
         const maxQty = item.stockQuantity ?? Number.POSITIVE_INFINITY;
         const remaining = Math.max(maxQty - (cartQuantities[item.id] ?? 0), 0);
         const nextQty = Math.max(1, item.qty + delta);
         return { ...item, qty: Math.min(nextQty, remaining || 1) };
       });
-      const subtotal = items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+      const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
       return { ...prev, items, subtotal: Math.round(subtotal * 100) / 100 };
     });
   }, [bundle, cartQuantities]);
 
-  const handleRemoveItem = useCallback((itemId: string) => {
+  const handleRemoveItem = useCallback(async (itemId: string) => {
     if (!bundle) return;
-    
-    setBundle(prev => {
+
+    const removed = bundle.items.find((item) => item.id === itemId);
+    if (!removed) return;
+
+    setBundle((prev) => {
       if (!prev) return prev;
-      const items = prev.items.filter(item => item.id !== itemId);
-      const subtotal = items.reduce((sum, item) => sum + (item.price * item.qty), 0);
+      const items = prev.items.filter((item) => item.id !== itemId);
+      const subtotal = items.reduce((sum, item) => sum + item.price * item.qty, 0);
       return { ...prev, items, subtotal: Math.round(subtotal * 100) / 100 };
     });
-  }, [bundle]);
+
+    try {
+      await sendFeedback({
+        user_id: USER_ID,
+        rejected_items: [removed.title ?? removed.id],
+        reason: 'User removed from bundle',
+      });
+
+      addEvent('FEEDBACK_SUBMITTED', `User rejected item: ${removed.title}`, {}, { item: removed.title });
+      toast({
+        title: 'Feedback saved',
+        description: `Me-Agent will avoid "${removed.title}" in future recommendations`,
+      });
+    } catch {
+      toast({
+        title: 'Feedback failed',
+        description: 'Could not save feedback. The bundle was still updated locally.',
+        variant: 'destructive',
+      });
+    }
+  }, [bundle, addEvent]);
 
   const handleAddBundleToCart = useCallback(() => {
     if (!bundle) return;
@@ -208,7 +264,7 @@ export default function DemoPage() {
     const outOfStock: string[] = [];
     const insufficient: string[] = [];
 
-    bundle.items.forEach(item => {
+    bundle.items.forEach((item) => {
       const maxQty = item.stockQuantity ?? Number.POSITIVE_INFINITY;
       const existingQty = currentQuantities[item.id] ?? 0;
       const available = Math.max(maxQty - existingQty, 0);
@@ -233,7 +289,7 @@ export default function DemoPage() {
       return;
     }
 
-    bundle.items.forEach(item => {
+    bundle.items.forEach((item) => {
       addCartItem({
         id: item.id,
         title: item.title,
@@ -264,32 +320,28 @@ export default function DemoPage() {
 
   const handleExplain = useCallback(async () => {
     if (!bundle) return;
-    
     setIsExplaining(true);
-    
+
     try {
-      const result = await explainBundle({
-        intent: intentForm.shoppingIntent,
-        bundle,
-      });
+      const lines = bundle.items
+        .map((item) => {
+          const tags = item.reasonTags?.length ? ` (${item.reasonTags.join(', ')})` : '';
+          return `• ${item.title}${tags}`;
+        })
+        .join('\n');
+
+      const text = `Based on your intent, Me-Agent selected ${bundle.items.length} item(s) within your CAD $${intentForm.maxSpend} budget:\n${lines}`;
+      const result = await explainBundle({ text });
       setExplanation(result);
-      
-      addEvent('EXPLANATION_GENERATED', 'Agent explained its reasoning', {}, { hasAudio: !!result.audioUrl });
-    } catch (error) {
-      toast({
-        title: 'Failed to generate explanation',
-        description: 'Please try again',
-        variant: 'destructive',
-      });
+      addEvent('EXPLANATION_GENERATED', 'Agent explanation displayed', {}, { hasAudio: false });
     } finally {
       setIsExplaining(false);
     }
-  }, [bundle, intentForm.shoppingIntent, addEvent]);
+  }, [bundle, intentForm.maxSpend, addEvent]);
 
   return (
     <DashboardLayout>
       <div className="grid lg:grid-cols-2 gap-6">
-        {/* Left Column: Intent + Constraints */}
         <div className="space-y-6">
           <IntentFormPanel
             form={intentForm}
@@ -300,35 +352,34 @@ export default function DemoPage() {
           />
         </div>
 
-        {/* Right Column: Agent Output */}
         <div className="space-y-6">
           <BundleResultPanel
             bundle={bundle}
             maxSpend={intentForm.maxSpend}
+            blockedItems={blockedItems}
             onUpdateQuantity={handleUpdateQuantity}
             onRemoveItem={handleRemoveItem}
             cartQuantities={cartQuantities}
           />
-          
+
           <CartPanel
             bundle={bundle}
             cartCount={cartCount}
             onAddBundle={handleAddBundleToCart}
             onOpenCheckout={handleOpenCheckout}
           />
-          
+
           <ExplainPanel
             explanation={explanation}
             bundle={bundle}
             isLoading={isExplaining}
             onExplain={handleExplain}
           />
-          
+
           <AuditPreviewPanel events={getRecentEvents()} />
         </div>
       </div>
 
-      {/* Passkey Consent Modal */}
       <PasskeyConsentModal
         open={showPasskeyModal}
         state={passkeyState}
@@ -336,6 +387,13 @@ export default function DemoPage() {
         onCancel={handlePasskeyCancel}
         onRetry={handlePasskeyRetry}
       />
+
+      {showVoiceExplainer && (
+        <VoiceExplainer
+          explanation={voiceExplanation || explanation?.text || ''}
+          onClose={() => setShowVoiceExplainer(false)}
+        />
+      )}
     </DashboardLayout>
   );
 }

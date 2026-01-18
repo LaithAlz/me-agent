@@ -26,16 +26,17 @@ export interface CartItem {
 }
 
 export interface PermissionPolicy {
-  maxSpend: number;
+  maxSpend: number; // in CAD
   allowedCategories: string[];
   agentEnabled: boolean;
   merchantId?: string;
+  requireConfirm?: boolean; // Require user confirmation for checkout
 }
 
 export interface BundleItem {
   id: string;
   title: string;
-  price: number;
+  price: number; // in CAD
   category: string;
   merchant: string;
   reasonTags: string[];
@@ -46,8 +47,8 @@ export interface BundleItem {
 
 export interface BundleResult {
   items: BundleItem[];
-  subtotal: number;
-  currency: string;
+  subtotal: number; // in CAD
+  currency: 'CAD';
 }
 
 export interface AuditEvent {
