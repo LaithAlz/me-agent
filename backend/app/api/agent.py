@@ -56,7 +56,7 @@ MONGO_DB_NAME = (
 
 # Backboard LLM routing (dynamic, not hardcoded)
 DECISION_PROVIDER = getattr(settings, "DECISION_PROVIDER", None) or os.getenv("DECISION_PROVIDER") or "openai"
-DECISION_MODEL = getattr(settings, "DECISION_MODEL", None) or os.getenv("DECISION_MODEL") or "gpt-4.1"
+DECISION_MODEL = getattr(settings, "DECISION_MODEL", None) or os.getenv("DECISION_MODEL") or "gpt-4.1-mini"
 
 EXPLAIN_PROVIDER = getattr(settings, "EXPLAIN_PROVIDER", None) or os.getenv("EXPLAIN_PROVIDER") or "openai"
 EXPLAIN_MODEL = getattr(settings, "EXPLAIN_MODEL", None) or os.getenv("EXPLAIN_MODEL") or "gpt-5-mini"
@@ -827,17 +827,17 @@ async def recommend(req: RecommendationRequest):
         ],
         "cart_reference": "Use the latest decision in this thread as the chosen cart and reference only items from the provided inventory when listing avoided examples.",
     }
-
     explanation_obj = await _add_message_with_timeout(
-        stage="add_message explanation",
-        timeout_s=EXPLAIN_TIMEOUT_S,
-        thread_id=str(thread_id),
-        content=json.dumps(explain_prompt),
-        llm_provider=EXPLAIN_PROVIDER,
-        model_name=EXPLAIN_MODEL,
-        memory="Auto",
-        stream=False,
+    stage="add_message explanation",
+    timeout_s=EXPLAIN_TIMEOUT_S,
+    thread_id=str(thread_id),
+    content=json.dumps(explain_prompt),
+    llm_provider=EXPLAIN_PROVIDER,
+    model_name=EXPLAIN_MODEL,
+    memory="off",  # was "Auto"
+    stream=False,
     )
+
 
     # One retry
     if explanation_obj is None:
