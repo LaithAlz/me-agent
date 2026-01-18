@@ -21,7 +21,7 @@ import {
   addCartItem,
   loadCartItems,
 } from '@/lib/storage';
-import { authorizePasskey, generateBundle, explainBundle, sendFeedback } from '@/lib/api';
+import { authorizePasskey, generateBundleWithExplain, explainBundle, sendFeedback } from '@/lib/api';
 import { checkAuthority } from '@/lib/backendApi';
 import type { IntentForm, BundleResult, ExplainResult, CartItem, PasskeyState } from '@/types';
 import { DEFAULT_INTENT_FORM } from '@/types';
@@ -44,9 +44,33 @@ export default function DemoPage() {
   const [showVoiceExplainer, setShowVoiceExplainer] = useState(false);
   const [voiceExplanation, setVoiceExplanation] = useState<string | null>(null);
   const [blockedItems, setBlockedItems] = useState<string[]>([]);
+  const [inventory, setInventory] = useState<any[]>([]);
+  const [isInventoryLoading, setIsInventoryLoading] = useState(false);
 
   const navigate = useNavigate();
   const { addEvent, getRecentEvents } = useAuditLog();
+
+  useEffect(() => {
+    const loadInventory = async () => {
+      setIsInventoryLoading(true);
+      try {
+        const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+        const response = await fetch(`${base}/api/shopify/products/search`);
+        if (!response.ok) {
+          throw new Error('Failed to load products');
+        }
+        const data = await response.json();
+        setInventory(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('Failed to load inventory:', error);
+        setInventory([]);
+      } finally {
+        setIsInventoryLoading(false);
+      }
+    };
+
+    loadInventory();
+  }, []);
 
   const cartQuantities = useMemo(() => {
     return cartItems.reduce<Record<string, number>>((acc, item) => {
@@ -140,26 +164,79 @@ export default function DemoPage() {
         setCartItems(currentCart);
         setCartCount(currentCart.reduce((sum, item) => sum + item.qty, 0));
 
-        const bundleResult = await generateBundle({
-          ...intentForm,
-          cartItems: currentCart,
+        if (!inventory.length) {
+          toast({
+            title: 'No inventory available',
+            description: 'Unable to reach the product catalog. Please retry in a moment.',
+            variant: 'destructive',
+          });
+          setIsGenerating(false);
+          return;
+        }
+
+        const products = inventory.map((product, index) => {
+          const price =
+            typeof product?.price === 'number'
+              ? product.price
+              : typeof product?.variants?.[0]?.price === 'number'
+                ? product.variants[0].price
+                : 0;
+          const baseTags = Array.isArray(product?.tags) ? product.tags : [];
+          const typeTag = typeof product?.productType === 'string' ? product.productType : '';
+          const tags = [typeTag, ...baseTags]
+            .map((tag) => String(tag).trim().toLowerCase())
+            .filter(Boolean);
+
+          return {
+            name: String(product?.title ?? product?.name ?? `Item ${index + 1}`),
+            price,
+            brand: String(product?.vendor ?? product?.merchant ?? 'Unknown'),
+            tags,
+          };
         });
 
-        setBundle(bundleResult);
-        setExplanation(null);
+        const result = await generateBundleWithExplain({
+          ...intentForm,
+          userId: USER_ID,
+          products,
+        });
+
+        const enrichedItems = result.bundle.items.map((item) => {
+          const match = inventory.find((product) => {
+            const title = String(product?.title ?? product?.name ?? '').trim().toLowerCase();
+            const vendor = String(product?.vendor ?? product?.merchant ?? '').trim().toLowerCase();
+            return title === item.title.trim().toLowerCase() && vendor === item.merchant.trim().toLowerCase();
+          });
+
+          const imageUrl = match?.images?.[0] ?? match?.imageUrl ?? item.imageUrl;
+          const stockQuantity =
+            typeof match?.stockQuantity === 'number' ? match.stockQuantity : item.stockQuantity;
+
+          return {
+            ...item,
+            imageUrl: imageUrl || undefined,
+            stockQuantity,
+          };
+        });
+
+        const enrichedBundle = { ...result.bundle, items: enrichedItems };
+
+        setBundle(enrichedBundle);
+        setExplanation({ text: result.explanation });
+        setVoiceExplanation(result.explanation);
         setBlockedItems([]);
 
-        const bundleItemCount = bundleResult.items.reduce((sum, item) => sum + item.qty, 0);
+        const bundleItemCount = enrichedBundle.items.reduce((sum, item) => sum + item.qty, 0);
         addEvent(
           'BUNDLE_GENERATED',
-          `Generated ${bundleItemCount} items totaling $${bundleResult.subtotal.toFixed(2)}`,
+          `Generated ${bundleItemCount} items totaling $${enrichedBundle.subtotal.toFixed(2)}`,
           {
             maxSpend: intentForm.maxSpend,
             allowedCategories: intentForm.allowedCategories,
           },
           {
             itemCount: bundleItemCount,
-            subtotal: bundleResult.subtotal,
+            subtotal: enrichedBundle.subtotal,
           }
         );
 

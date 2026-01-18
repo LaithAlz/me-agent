@@ -32,6 +32,8 @@ from backboard.exceptions import BackboardNotFoundError
 from backboard.exceptions import BackboardAPIError
 
 from app.core.config import get_settings
+from app.schemas.bundle import BundleRequest, BundleItem, BundleResult
+from app.api.shopify import PRODUCTS, PURCHASE_HISTORY
 
 
 # ============================================================
@@ -267,6 +269,40 @@ def _norm(s: Optional[str]) -> str:
     return (s or "").strip().lower()
 
 
+def _normalize(s: Optional[str]) -> str:
+    return _norm(s)
+
+
+def _build_reason_tags(
+    base_tags: list[str],
+    brand_pref: bool,
+    past_brand: bool,
+    past_item: bool,
+) -> list[str]:
+    tags: list[str] = []
+    seen: set[str] = set()
+
+    def add(tag: str) -> None:
+        if not tag:
+            return
+        if tag in seen:
+            return
+        seen.add(tag)
+        tags.append(tag)
+
+    for tag in base_tags:
+        add(tag)
+
+    if brand_pref:
+        add("Preferred brand")
+    if past_brand:
+        add("Previously purchased brand")
+    if past_item:
+        add("Previously purchased item")
+
+    return tags
+
+
 def _normalize_user_id(req: RecommendationRequest) -> str:
     uid = req.user_id or req.userId
     if not uid or not uid.strip():
@@ -368,6 +404,9 @@ def _filter_inventory_by_allowed_categories(products: list[Product], allowed_cat
     filtered: list[Product] = []
     for p in products:
         tagset = set(_norm(t) for t in (p.tags or []))
+        type_tag = _norm(getattr(p, "productType", None))
+        if type_tag:
+            tagset.add(type_tag)
         if tagset.intersection(allowed_set):
             filtered.append(p)
 
@@ -513,6 +552,19 @@ async def recommend(req: RecommendationRequest):
 
     # Deterministic category filtering using tags
     inventory_filtered = _filter_inventory_by_allowed_categories(req.products, allowed_norm)
+
+    if not inventory_filtered:
+        empty = {
+            "items": [],
+            "total": 0.0,
+            "notes": "No items match the selected categories. Try different categories or broaden your selection.",
+        }
+        return JSONResponse(
+            content={
+                "cart": json.dumps(empty),
+                "explanation": "No relevant items were available for the selected categories.",
+            }
+        )
 
     # Create Backboard thread
     try:

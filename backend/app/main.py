@@ -17,6 +17,7 @@ from .api.audit import router as audit_router
 from .api.voice import router as voice_router
 from .api.avatar import router as avatar_router
 from .api.agent import router as agent_router
+from .api.shopify import router as shopify_router
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from backboard.exceptions import BackboardAPIError
@@ -92,6 +93,7 @@ app.include_router(audit_router, prefix="/api")
 app.include_router(voice_router, prefix="/api")
 app.include_router(avatar_router, prefix="/api")
 app.include_router(agent_module.router, prefix="/api")
+app.include_router(shopify_router)
 
 @app.exception_handler(BackboardAPIError)
 async def backboard_exception_handler(request: Request, exc: BackboardAPIError):

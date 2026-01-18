@@ -290,8 +290,15 @@ async def login_options(request: LoginOptionsRequest):
     # Check if user exists
     user = await get_user_by_username(request.username)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
+        if settings.DEMO_MODE:
+            # Demo mode: auto-create a user to allow login flow
+            user_id = f"user_{uuid.uuid4().hex[:12]}"
+            display_name = request.username
+            await save_user(user_id, request.username, display_name)
+            user = await get_user_by_username(request.username)
+        else:
+            raise HTTPException(status_code=404, detail="User not found")
+
     user_id = user["id"]
     
     # Get user's credentials

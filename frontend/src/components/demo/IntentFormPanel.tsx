@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -34,6 +34,14 @@ export function IntentFormPanel({
   const [policy, setPolicy] = useState<AgentPolicy | null>(null);
   const [isLoadingPolicy, setIsLoadingPolicy] = useState(true);
   const [isSavingPolicy, setIsSavingPolicy] = useState(false);
+  const didInitAllowAll = useRef(false);
+
+  const normalizeCategory = (value: string) => value.trim().toLowerCase();
+
+  const formatCategoryLabel = (value: string) =>
+    value
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
 
   // Load current policy from backend
   useEffect(() => {
@@ -44,7 +52,7 @@ export function IntentFormPanel({
         onChange({
           ...form,
           maxSpend: data.policy.maxSpend,
-          allowedCategories: data.policy.allowedCategories,
+          allowedCategories: data.policy.allowedCategories.map(normalizeCategory),
           agentEnabled: data.policy.agentEnabled,
         });
       } catch (e) {
@@ -92,7 +100,11 @@ export function IntentFormPanel({
   });
 
   const availableCategories = useMemo(() => {
-    const set = new Set((products ?? []).map((product) => product.productType).filter(Boolean));
+    const set = new Set(
+      (products ?? [])
+        .map((product) => String(product.productType || '').trim().toLowerCase())
+        .filter(Boolean)
+    );
     return Array.from(set).sort();
   }, [products]);
 
@@ -105,6 +117,18 @@ export function IntentFormPanel({
       form.allowedCategories.every((c) => availableCategories.includes(c));
     setAllowAll(isAll);
   }, [form.allowedCategories, availableCategories]);
+
+  useEffect(() => {
+    if (!policy || availableCategories.length === 0 || didInitAllowAll.current) return;
+    const normalized = form.allowedCategories.map(normalizeCategory);
+    const legacyDefaults = new Set(['office', 'electronics']);
+    const isLegacyDefault = normalized.length > 0 && normalized.every((c) => legacyDefaults.has(c));
+    if (normalized.length === 0 || isLegacyDefault) {
+      setAllowAll(true);
+      handlePolicyChange({ allowedCategories: availableCategories });
+    }
+    didInitAllowAll.current = true;
+  }, [availableCategories]);
 
   const updateField = <K extends keyof IntentForm>(key: K, value: IntentForm[K]) => {
     onChange({ ...form, [key]: value });
@@ -253,7 +277,7 @@ export function IntentFormPanel({
                           : 'bg-muted text-muted-foreground hover:bg-muted/80'
                       } ${allowAll ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                      {category}
+                      {formatCategoryLabel(category)}
                     </button>
                   );
                 })}
