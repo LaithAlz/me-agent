@@ -1,5 +1,30 @@
 // Me-Agent Type Definitions
 
+export interface Product {
+  id: string;
+  title: string;
+  price: number;
+  imageUrl: string;
+  tags: string[];
+  productType: string;
+  vendor: string;
+  inStock: boolean;
+  stockQuantity: number;
+}
+
+export interface CartItem {
+  id: string;
+  title: string;
+  price: number;
+  qty: number;
+  imageUrl?: string;
+  tags?: string[];
+  productType?: string;
+  vendor?: string;
+  inStock?: boolean;
+  stockQuantity?: number;
+}
+
 export interface PermissionPolicy {
   maxSpend: number; // in CAD
   allowedCategories: string[];
@@ -16,6 +41,7 @@ export interface BundleItem {
   merchant: string;
   reasonTags: string[];
   qty: number;
+  stockQuantity?: number;
   imageUrl?: string;
 }
 
@@ -38,6 +64,8 @@ export type AuditAction =
   | 'CONSENT_GRANTED'
   | 'CONSENT_DENIED'
   | 'BUNDLE_GENERATED'
+  | 'AUTHORITY_BLOCKED'
+  | 'FEEDBACK_SUBMITTED'
   | 'CART_CREATED'
   | 'CART_LINES_ADDED'
   | 'CHECKOUT_LINK_READY'
@@ -67,26 +95,35 @@ export interface IntentForm {
 }
 
 export const AVAILABLE_CATEGORIES = [
-  'office',
-  'electronics',
-  'clothing',
-  'home',
-  'sports',
-  'books',
-  'beauty',
-  'food',
+  "office",
+  "electronics",
+  "clothing",
+  "home",
+  "sports",
+  "books",
+  "beauty",
+  "food",
+  "accessories",
+  "lifestyle",
+  "fashion",
+  "grocery",
+  "fitness",
+  "entertainment",
+  "wellness",
+  "smart_home",
+  "construction",
 ] as const;
 
 export const DEFAULT_PERMISSION_POLICY: PermissionPolicy = {
   maxSpend: 150,
-  allowedCategories: ['office'],
+  allowedCategories: [...AVAILABLE_CATEGORIES],
   agentEnabled: true,
 };
 
 export const DEFAULT_INTENT_FORM: IntentForm = {
   shoppingIntent: '',
   maxSpend: 150,
-  allowedCategories: ['office'],
+  allowedCategories: [...AVAILABLE_CATEGORIES],
   brandPreferences: [],
   priceSensitivity: 3,
   agentEnabled: true,

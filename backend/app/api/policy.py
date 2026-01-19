@@ -13,6 +13,52 @@ router = APIRouter(prefix="/policy", tags=["Policy"])
 # Default demo user if not signed in
 DEFAULT_DEMO_USER = "demo-user-1"
 
+ALL_ALLOWED_CATEGORIES = [
+    "office",
+    "electronics",
+    "clothing",
+    "home",
+    "sports",
+    "books",
+    "beauty",
+    "food",
+    "accessories",
+    "lifestyle",
+    "fashion",
+    "grocery",
+    "fitness",
+    "entertainment",
+    "wellness",
+    "smart_home",
+    "construction",
+]
+
+LEGACY_CATEGORY_SETS = [
+    {"office"},
+    {"office", "electronics"},
+    {"office", "electronics", "clothing", "home", "sports", "books", "beauty", "food"},
+]
+
+
+def _should_expand_categories(categories: list[str]) -> bool:
+    if not categories:
+        return True
+    return set(categories) in LEGACY_CATEGORY_SETS
+
+
+def _normalize_categories(categories: Optional[list[str]]) -> list[str]:
+    if not categories:
+        return []
+    normalized: list[str] = []
+    for cat in categories:
+        if not cat:
+            continue
+        value = cat.strip().lower()
+        if not value:
+            continue
+        normalized.append(value)
+    return normalized
+
 
 def get_user_id(meagent_user: Optional[str]) -> str:
     """Get user ID from cookie or return demo user."""
@@ -29,10 +75,22 @@ async def get_user_policy(meagent_user: Optional[str] = Cookie(None)):
     
     policy_data = await get_policy(user_id)
     
+    normalized_allowed = _normalize_categories(
+        policy_data.get("allowedCategories", list(ALL_ALLOWED_CATEGORIES))
+    )
+
+    # Auto-migrate legacy defaults to full selectable list
+    if _should_expand_categories(normalized_allowed):
+        policy_data["allowedCategories"] = list(ALL_ALLOWED_CATEGORIES)
+        policy_data["policyVersion"] = 2
+        await save_policy(user_id, policy_data)
+
     # Build AgentPolicy from stored data
     policy = AgentPolicy(
         maxSpend=policy_data.get("maxSpend", 150),
-        allowedCategories=policy_data.get("allowedCategories", ["office"]),
+        allowedCategories=_normalize_categories(
+            policy_data.get("allowedCategories", list(ALL_ALLOWED_CATEGORIES))
+        ) or list(ALL_ALLOWED_CATEGORIES),
         agentEnabled=policy_data.get("agentEnabled", True),
         requireConfirm=policy_data.get("requireConfirm", True),
     )
@@ -59,11 +117,17 @@ async def update_user_policy(
     current = await get_policy(user_id)
     
     # Merge updates
+    allowed_categories = (
+        _normalize_categories(update.allowedCategories)
+        if update.allowedCategories is not None
+        else _normalize_categories(current.get("allowedCategories", list(ALL_ALLOWED_CATEGORIES)))
+    )
     new_policy = {
         "maxSpend": update.maxSpend if update.maxSpend is not None else current.get("maxSpend", 150),
-        "allowedCategories": update.allowedCategories if update.allowedCategories is not None else current.get("allowedCategories", ["office"]),
+        "allowedCategories": allowed_categories or list(ALL_ALLOWED_CATEGORIES),
         "agentEnabled": update.agentEnabled if update.agentEnabled is not None else current.get("agentEnabled", True),
         "requireConfirm": update.requireConfirm if update.requireConfirm is not None else current.get("requireConfirm", True),
+        "policyVersion": 2,
     }
     
     # Validate
@@ -74,7 +138,7 @@ async def update_user_policy(
         raise HTTPException(status_code=400, detail="allowedCategories must be a list")
     
     # Validate categories against known categories
-    VALID_CATEGORIES = {"office", "electronics", "clothing", "home", "sports", "books", "beauty", "food"}
+    VALID_CATEGORIES = set(ALL_ALLOWED_CATEGORIES)
     invalid_cats = set(new_policy["allowedCategories"]) - VALID_CATEGORIES
     if invalid_cats:
         raise HTTPException(
@@ -108,9 +172,10 @@ async def reset_policy(meagent_user: Optional[str] = Cookie(None)):
     
     default_policy = {
         "maxSpend": 150,
-        "allowedCategories": ["office", "electronics"],
+        "allowedCategories": list(ALL_ALLOWED_CATEGORIES),
         "agentEnabled": True,
         "requireConfirm": True,
+        "policyVersion": 2,
     }
     
     saved = await save_policy(user_id, default_policy)

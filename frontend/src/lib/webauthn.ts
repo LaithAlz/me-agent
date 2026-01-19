@@ -3,7 +3,7 @@
  * Handles real passkey registration and authentication using the Web Authentication API
  */
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'https://me-agent.onrender.com';
 
 // ============================================================
 // Types
@@ -92,7 +92,7 @@ export interface RegisterResult {
 export async function registerPasskey(username: string, displayName?: string): Promise<RegisterResult> {
   try {
     // Step 1: Get registration options from server
-    const optionsResponse = await fetch(`${API_BASE}/auth/register/options`, {
+    const optionsResponse = await fetch(`${API_BASE}/api/auth/register/options`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -133,7 +133,7 @@ export async function registerPasskey(username: string, displayName?: string): P
 export async function registerAdditionalPasskey(displayName?: string): Promise<RegisterResult> {
   try {
     // Step 1: Get registration options for additional passkey
-    const optionsResponse = await fetch(`${API_BASE}/auth/register-additional/options`, {
+    const optionsResponse = await fetch(`${API_BASE}/api/auth/register-additional/options`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -176,7 +176,7 @@ export async function registerAdditionalPasskey(displayName?: string): Promise<R
     // Step 3: Send credential to server for verification
     const attestationResponse = credential.response as AuthenticatorAttestationResponse;
     
-    const verifyResponse = await fetch(`${API_BASE}/auth/register-additional/verify`, {
+    const verifyResponse = await fetch(`${API_BASE}/api/auth/register-additional/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -260,7 +260,7 @@ async function performWebAuthnRegistration(options: any, username: string): Prom
     // Step 3: Send credential to server for verification
     const attestationResponse = credential.response as AuthenticatorAttestationResponse;
     
-    const verifyResponse = await fetch(`${API_BASE}/auth/register/verify`, {
+    const verifyResponse = await fetch(`${API_BASE}/api/auth/register/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -324,7 +324,7 @@ export interface AuthResult {
 export async function authenticatePasskey(username?: string): Promise<AuthResult> {
   try {
     // Step 1: Get authentication options from server
-    const optionsResponse = await fetch(`${API_BASE}/auth/login/options`, {
+    const optionsResponse = await fetch(`${API_BASE}/api/auth/login/options`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -363,7 +363,7 @@ export async function authenticatePasskey(username?: string): Promise<AuthResult
     // Step 3: Send credential to server for verification
     const assertionResponse = credential.response as AuthenticatorAssertionResponse;
     
-    const verifyResponse = await fetch(`${API_BASE}/auth/login/verify`, {
+    const verifyResponse = await fetch(`${API_BASE}/api/auth/login/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -431,18 +431,28 @@ export async function authorizeActionWithPasskey(action: string): Promise<AuthRe
     console.log('Platform authenticator available, checking for registered passkey...');
 
     // Check if we have a session (user already registered)
-    const sessionResponse = await fetch(`${API_BASE}/auth/session`, {
+    const sessionResponse = await fetch(`${API_BASE}/api/auth/session`, {
       credentials: 'include',
+      method: 'GET',
     });
+    
+    console.log('Session response status:', sessionResponse.status);
     
     if (sessionResponse.ok) {
       const session = await sessionResponse.json();
+      console.log('Session data:', { authenticated: session.authenticated, username: session.username });
+      
       if (session.authenticated && session.username) {
         // User is registered, trigger real WebAuthn authentication
         console.log('Found registered user, triggering Windows Hello/biometric prompt...');
         const result = await authenticatePasskey(session.username);
         return result;
+      } else {
+        // Session exists but not authenticated
+        console.log('Session exists but not authenticated. User may be in demo mode.');
       }
+    } else {
+      console.log('Session check failed:', sessionResponse.status);
     }
     
     // No registered user - must register first

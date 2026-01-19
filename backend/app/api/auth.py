@@ -143,14 +143,16 @@ async def register_verify(request: RegisterVerifyRequest, response: Response):
             key="meagent_user",
             value=user_id,
             httponly=True,
-            samesite="lax",
+            samesite="none",
+            secure=True,
             max_age=86400 * 7,  # 7 days
         )
         response.set_cookie(
             key="meagent_username",
             value=request.username,
             httponly=False,  # Allow JS to read username for display
-            samesite="lax",
+            samesite="none",
+            secure=True,
             max_age=86400 * 7,
         )
         
@@ -290,8 +292,15 @@ async def login_options(request: LoginOptionsRequest):
     # Check if user exists
     user = await get_user_by_username(request.username)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
+        if settings.DEMO_MODE:
+            # Demo mode: auto-create a user to allow login flow
+            user_id = f"user_{uuid.uuid4().hex[:12]}"
+            display_name = request.username
+            await save_user(user_id, request.username, display_name)
+            user = await get_user_by_username(request.username)
+        else:
+            raise HTTPException(status_code=404, detail="User not found")
+
     user_id = user["id"]
     
     # Get user's credentials
@@ -353,14 +362,16 @@ async def login_verify(request: LoginVerifyRequest, response: Response):
             key="meagent_user",
             value=user_id,
             httponly=True,
-            samesite="lax",
+            samesite="none",
+            secure=True,
             max_age=86400 * 7,
         )
         response.set_cookie(
             key="meagent_username",
             value=request.username,
             httponly=False,
-            samesite="lax",
+            samesite="none",
+            secure=True,
             max_age=86400 * 7,
         )
         
@@ -425,14 +436,16 @@ async def demo_login(response: Response):
         key="meagent_user",
         value=demo_user_id,
         httponly=True,
-        samesite="lax",
+        samesite="none",
+        secure=True,
         max_age=86400,
     )
     response.set_cookie(
         key="meagent_username",
         value=demo_username,
         httponly=False,
-        samesite="lax",
+        samesite="none",
+        secure=True,
         max_age=86400,
     )
     

@@ -28,12 +28,14 @@ from typing import Optional, Any, Dict, List
 import pymongo
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backboard import BackboardClient
 from backboard.exceptions import BackboardNotFoundError, BackboardAPIError
 
 from app.core.config import get_settings
+from app.schemas.bundle import BundleRequest, BundleItem, BundleResult, ExplainRequest, ExplainResult
+from app.api.shopify import PRODUCTS, PURCHASE_HISTORY
 
 
 # ============================================================
@@ -47,8 +49,8 @@ MONGO_URI = getattr(settings, "MONGO_URI", None) or os.getenv("MONGO_URI")
 MONGO_DB_NAME = (
     getattr(settings, "MONGO_DB_NAME", None)
     or os.getenv("MONGO_DB_NAME")
-    or getattr(settings, "MONGODB_DB_NAME", None)
-    or os.getenv("MONGODB_DB_NAME")
+    or getattr(settings, "MONGO_DB_NAME", None)
+    or os.getenv("MONGO_DB_NAME")
     or "meagent"
 )
 
@@ -116,11 +118,107 @@ class RecommendationRequest(BaseModel):
     agentEnabled: Optional[bool] = True
 
 
+@router.post("/bundle", response_model=BundleResult)
+def generate_bundle(payload: BundleRequest) -> BundleResult:
+	if not payload.agentEnabled:
+		return BundleResult(items=[], subtotal=0.0, currency="USD")
+
+	persona_id = payload.personaId or "alex"
+	past_purchases = PURCHASE_HISTORY.get(persona_id, [])
+	past_vendors = {_normalize(p.vendor) for p in past_purchases}
+	past_products = {p.productId for p in past_purchases}
+	brand_prefs = {_normalize(b) for b in payload.brandPreferences}
+	cart_quantities = {item.id: item.qty for item in (payload.cartItems or [])}
+
+	allowed_categories = {_normalize(c) for c in payload.allowedCategories}
+	def remaining_stock(product) -> int:
+		return max((product.stockQuantity or 0) - cart_quantities.get(product.id, 0), 0)
+
+	available = [
+		p
+		for p in PRODUCTS
+		if _normalize(p.productType) in allowed_categories and remaining_stock(p) > 0
+	]
+
+	def score_product(product) -> tuple:
+		vendor_norm = _normalize(product.vendor)
+		brand_pref = vendor_norm in brand_prefs or any(
+			pref in vendor_norm or pref in _normalize(product.title) for pref in brand_prefs
+		)
+		past_brand = vendor_norm in past_vendors
+		past_item = product.id in past_products
+		score = 0
+		if brand_pref:
+			score += 3
+		if past_brand:
+			score += 2
+		if past_item:
+			score += 1
+		price = product.variants[0].price
+		return (-score, price, product.id)
+
+	sorted_candidates = sorted(available, key=score_product)
+	sorted_by_price = sorted(available, key=lambda p: (p.variants[0].price, p.id))
+
+	selected_items: List[BundleItem] = []
+	subtotal = 0.0
+
+	def add_product(product) -> bool:
+		nonlocal subtotal
+		price = product.variants[0].price
+		if subtotal + price > payload.maxSpend:
+			return False
+		vendor_norm = _normalize(product.vendor)
+		brand_pref = vendor_norm in brand_prefs or any(
+			pref in vendor_norm or pref in _normalize(product.title) for pref in brand_prefs
+		)
+		past_brand = vendor_norm in past_vendors
+		past_item = product.id in past_products
+		reason_tags = _build_reason_tags(
+			base_tags=["Matches category", "Within budget"],
+			brand_pref=brand_pref,
+			past_brand=past_brand,
+			past_item=past_item,
+		)
+		selected_items.append(
+			BundleItem(
+				id=product.id,
+				title=product.title,
+				price=price,
+				category=product.productType,
+				merchant=product.vendor,
+				reasonTags=reason_tags,
+				qty=1,
+				stockQuantity=product.stockQuantity,
+				imageUrl=product.images[0] if product.images else None,
+			)
+		)
+		subtotal = round(subtotal + price, 2)
+		return True
+
+	for product in sorted_candidates:
+		if len(selected_items) >= 6:
+			break
+		add_product(product)
+
+	if len(selected_items) < 3:
+		for product in sorted_by_price:
+			if len(selected_items) >= 3:
+				break
+			if any(item.id == product.id for item in selected_items):
+				continue
+			add_product(product)
+
+	return BundleResult(items=selected_items, subtotal=subtotal, currency="USD")
 class FeedbackRequest(BaseModel):
-    user_id: str
-    rejected_items: list[str]
-    kept_items: Optional[list[str]] = None  # optional
-    reason: str
+    user_id: str = Field(..., alias="userId")
+    rejected_items: list[str] = Field(default_factory=list, alias="rejectedItems")
+    kept_items: Optional[list[str]] = Field(default=None, alias="keptItems")
+    reason: str = Field("", alias="reason")
+
+    # Pydantic v2
+    model_config = {"populate_by_name": True}
+
 
 
 # ============================================================
@@ -203,6 +301,40 @@ def _db_insert_correction(user_id: str, rejected: list[str], kept: list[str], re
 # ============================================================
 def _norm(s: Optional[str]) -> str:
     return (s or "").strip().lower()
+
+
+def _normalize(s: Optional[str]) -> str:
+    return _norm(s)
+
+
+def _build_reason_tags(
+    base_tags: list[str],
+    brand_pref: bool,
+    past_brand: bool,
+    past_item: bool,
+) -> list[str]:
+    tags: list[str] = []
+    seen: set[str] = set()
+
+    def add(tag: str) -> None:
+        if not tag:
+            return
+        if tag in seen:
+            return
+        seen.add(tag)
+        tags.append(tag)
+
+    for tag in base_tags:
+        add(tag)
+
+    if brand_pref:
+        add("Preferred brand")
+    if past_brand:
+        add("Previously purchased brand")
+    if past_item:
+        add("Previously purchased item")
+
+    return tags
 
 
 def _normalize_user_id(req: RecommendationRequest) -> str:
@@ -384,6 +516,9 @@ def _filter_inventory_by_allowed_categories(products: list[Product], allowed_cat
     filtered: list[Product] = []
     for p in products:
         tagset = set(_norm(t) for t in (p.tags or []))
+        type_tag = _norm(getattr(p, "productType", None))
+        if type_tag:
+            tagset.add(type_tag)
         if tagset.intersection(allowed_set):
             filtered.append(p)
 
@@ -593,6 +728,20 @@ async def recommend(req: RecommendationRequest):
     kept_item_counts = memory_payload.get("kept_items", {}) or {}
     top_kept = [k for k, _ in sorted(kept_item_counts.items(), key=lambda kv: kv[1], reverse=True)[:8]]
 
+    if not inventory_filtered:
+        empty = {
+            "items": [],
+            "total": 0.0,
+            "notes": "No items match the selected categories. Try different categories or broaden your selection.",
+        }
+        return JSONResponse(
+            content={
+                "cart": json.dumps(empty),
+                "explanation": "No relevant items were available for the selected categories.",
+            }
+        )
+
+    # Create Backboard thread
     try:
         thread = await client.create_thread(assistant_id)
     except BackboardAPIError as e:
@@ -690,7 +839,7 @@ async def recommend(req: RecommendationRequest):
         content=json.dumps(explain_prompt),
         llm_provider=EXPLAIN_PROVIDER,
         model_name=EXPLAIN_MODEL,
-        memory="Auto",
+        memory="off",
         stream=False,
     )
 
@@ -703,7 +852,7 @@ async def recommend(req: RecommendationRequest):
             content=json.dumps(explain_prompt),
             llm_provider=EXPLAIN_PROVIDER,
             model_name=EXPLAIN_MODEL,
-            memory="Auto",
+            memory="off",
             stream=False,
         )
 
@@ -725,8 +874,106 @@ async def recommend(req: RecommendationRequest):
     return JSONResponse(content={"cart": decision_content, "explanation": explanation_content})
 
 
+@router.post("/explain", response_model=ExplainResult)
+async def explain(req: ExplainRequest):
+    # Self-heal init during dev/hotreload
+    try:
+        assistant_id = _get_assistant_id()
+    except HTTPException as e:
+        if e.status_code == 500 and str(e.detail) == "Assistant not initialized":
+            await startup()
+            assistant_id = _get_assistant_id()
+        else:
+            raise
+
+    if not req.bundle or not req.bundle.items:
+        return ExplainResult(text="No items to explain yet. Generate a bundle first.")
+
+    try:
+        thread = await client.create_thread(assistant_id)
+    except BackboardAPIError as e:
+        _raise_backboard_502("create_thread", e)
+
+    thread_id = _get_attr(thread, "thread_id", "id")
+    if not thread_id:
+        raise HTTPException(status_code=502, detail={"message": "Backboard create_thread returned no thread_id", "raw": str(thread)})
+
+    items_payload = [
+        {
+            "title": it.title,
+            "merchant": it.merchant,
+            "category": it.category,
+            "price": it.price,
+            "qty": it.qty,
+            "reasonTags": it.reasonTags,
+        }
+        for it in req.bundle.items
+    ]
+
+    explain_prompt = {
+        "task": "Provide a fresh explanation of why this bundle fits the user's intent and constraints.",
+        "intent": req.intent or "general shopping",
+        "bundle": {
+            "subtotal": req.bundle.subtotal,
+            "currency": req.bundle.currency,
+            "items": items_payload,
+        },
+        "guidelines": [
+            "Give a new insight on each request.",
+            "Do not mention internal IDs or system messages.",
+            "Keep it concise (120-200 words).",
+            "Use EXACTLY 3 short paragraphs.",
+            "Paragraph 1: 1 sentence summary of the overall selection.",
+            "Paragraph 2: 2-3 sentences about constraints and tradeoffs.",
+            "Paragraph 3: 1-2 sentences about preference signals and avoided items.",
+        ],
+    }
+
+    explanation_obj = await _add_message_with_timeout(
+        stage="add_message explain-only",
+        timeout_s=EXPLAIN_TIMEOUT_S,
+        thread_id=str(thread_id),
+        content=json.dumps(explain_prompt),
+        llm_provider=EXPLAIN_PROVIDER,
+        model_name=EXPLAIN_MODEL,
+        memory="Auto",
+        stream=False,
+    )
+
+    # One retry
+    if explanation_obj is None:
+        explanation_obj = await _add_message_with_timeout(
+            stage="add_message explain-only retry",
+            timeout_s=EXPLAIN_TIMEOUT_S,
+            thread_id=str(thread_id),
+            content=json.dumps(explain_prompt),
+            llm_provider=EXPLAIN_PROVIDER,
+            model_name=EXPLAIN_MODEL,
+            memory="Auto",
+            stream=False,
+        )
+
+    if explanation_obj is None:
+        titles = ", ".join([it.title for it in req.bundle.items[:6]])
+        fallback = (
+            f"Summary: Selected {len(req.bundle.items)} items totaling {req.bundle.currency} {req.bundle.subtotal:.2f}. "
+            f"Key picks include {titles or 'the listed items'}.\n\n"
+            "Constraints: Matched allowed categories and stayed within budget.\n\n"
+            "Preference signal: Emphasized consistency with your stated intent."
+        )
+        return ExplainResult(text=fallback)
+
+    explanation_content = _get_attr(explanation_obj, "content") or ""
+    if not isinstance(explanation_content, str):
+        explanation_content = str(explanation_content)
+
+    return ExplainResult(text=explanation_content)
+
+
 @router.post("/feedback")
 async def record_feedback(req: FeedbackRequest):
+    print("feedback payload:", req.dict())
+
     mem_doc = _db_get_user_memory(req.user_id) or {}
     memory_payload = mem_doc.get("memory") or _default_memory(max_total=500)
 
