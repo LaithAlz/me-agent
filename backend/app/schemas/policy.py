@@ -13,7 +13,28 @@ class AgentPolicy(BaseModel):
     All monetary values are in Canadian dollars (CAD).
     """
     maxSpend: float = Field(default=150.0, ge=0, description="Maximum spend limit in CAD (Canadian dollars)")
-    allowedCategories: List[str] = Field(default=["office"], description="Categories agent can recommend from")
+    allowedCategories: List[str] = Field(
+        default=[
+            "office",
+            "electronics",
+            "clothing",
+            "home",
+            "sports",
+            "books",
+            "beauty",
+            "food",
+            "accessories",
+            "lifestyle",
+            "fashion",
+            "grocery",
+            "fitness",
+            "entertainment",
+            "wellness",
+            "smart_home",
+            "construction",
+        ],
+        description="Categories agent can recommend from",
+    )
     agentEnabled: bool = Field(default=True, description="Whether the agent is enabled at all")
     requireConfirm: bool = Field(default=True, description="Require user confirmation for checkout")
 

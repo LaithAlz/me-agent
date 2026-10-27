@@ -11,13 +11,14 @@ import {
   isWebAuthnSupported,
 } from './webauthn'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://me-agent.onrender.com';
 
 // Simulated delay for realistic UX
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 async function apiRequest<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const url = `${API_BASE}/api${path}`;
+  const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
       ...(options?.headers ?? {}),
@@ -232,7 +233,7 @@ function getMaxTotal(form: IntentForm): number {
 // -------------------------------
 export async function recommendBundle(payload: RecommendRequest): Promise<RecommendResponse> {
   await delay(200)
-  return apiRequest<RecommendResponse>('/api/agent/recommend', {
+  return apiRequest<RecommendResponse>('/agent/recommend', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
@@ -277,7 +278,7 @@ export async function generateBundle(
 
 export async function sendFeedback(payload: FeedbackRequest): Promise<FeedbackResponse> {
   await delay(200)
-  return apiRequest<FeedbackResponse>('/api/agent/feedback', {
+  return apiRequest<FeedbackResponse>('/agent/feedback', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
@@ -298,7 +299,7 @@ export async function explainBundle(payload: { text: string }): Promise<ExplainR
 // -------------------------------
 export async function shopifyCartCreate(): Promise<{ cartId: string }> {
   await delay(600)
-  return apiRequest<{ cartId: string }>('/api/shopify/cart/create', { method: 'POST' })
+  return apiRequest<{ cartId: string }>('/shopify/cart/create', { method: 'POST' })
 }
 
 export async function shopifyCartLinesAdd(payload: {
@@ -306,7 +307,7 @@ export async function shopifyCartLinesAdd(payload: {
   lines: { merchandiseId: string; quantity: number }[]
 }): Promise<{ checkoutUrl: string }> {
   await delay(800)
-  return apiRequest<{ checkoutUrl: string }>('/api/shopify/cart/lines/add', {
+  return apiRequest<{ checkoutUrl: string }>('/shopify/cart/lines/add', {
     method: 'POST',
     body: JSON.stringify(payload),
   })

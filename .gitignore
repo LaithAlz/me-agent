@@ -104,3 +104,10 @@ data/
 *.p12
 *.pfx
 *.cer
+
+# editor
+.idea/
+.vscode/
+.DS_Store
+__pycache__/
+*.pyc

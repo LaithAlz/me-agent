@@ -17,6 +17,7 @@ from .api.audit import router as audit_router
 from .api.voice import router as voice_router
 from .api.avatar import router as avatar_router
 from .api.agent import router as agent_router
+from .api.shopify import router as shopify_router
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from backboard.exceptions import BackboardAPIError
@@ -36,7 +37,7 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     
     print("MONGO_URI set?", bool(settings.MONGO_URI))
-    print("MONGODB_DB_NAME:", settings.MONGODB_DB_NAME)
+    print("MONGO_DB_NAME:", settings.MONGO_DB_NAME)
 
     # Initialize database
     using_mongo = await init_db()
@@ -68,18 +69,16 @@ app = FastAPI(
 
 # Configure CORS
 settings = get_settings()
+print("CORS_ORIGINS in prod:", settings.CORS_ORIGINS)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-    "http://localhost:8080",
-            "http://127.0.0.1:8080",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-        ],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
 
 
 # ============================================================
@@ -92,6 +91,7 @@ app.include_router(audit_router, prefix="/api")
 app.include_router(voice_router, prefix="/api")
 app.include_router(avatar_router, prefix="/api")
 app.include_router(agent_module.router, prefix="/api")
+app.include_router(shopify_router)
 
 @app.exception_handler(BackboardAPIError)
 async def backboard_exception_handler(request: Request, exc: BackboardAPIError):

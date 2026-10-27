@@ -64,11 +64,11 @@ export default function AuditPage() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
+            <h1 className="text-2xl font-bold flex items-center text-white gap-2">
               <FileText className="h-6 w-6" />
               Audit Log
             </h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-white opacity-80 mt-1">
               Complete history of all Me-Agent actions
             </p>
           </div>

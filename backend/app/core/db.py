@@ -34,10 +34,10 @@ async def init_db() -> bool:
     if settings.MONGO_URI:
         try:
             _mongo_client = AsyncIOMotorClient(settings.MONGO_URI)
-            _db = _mongo_client[settings.MONGODB_DB_NAME]
+            _db = _mongo_client[settings.MONGO_DB_NAME]
             # Test connection
             await _mongo_client.admin.command('ping')
-            print(f"✅ Connected to MongoDB: {settings.MONGODB_DB_NAME}")
+            print(f"✅ Connected to MongoDB: {settings.MONGO_DB_NAME}")
             return True
         except Exception as e:
             print(f"⚠️ MongoDB connection failed: {e}")

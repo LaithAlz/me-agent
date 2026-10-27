@@ -10,6 +10,7 @@ class BundleItem(BaseModel):
 	merchant: str
 	reasonTags: List[str] = Field(default_factory=list)
 	qty: int = 1
+	stockQuantity: Optional[int] = None
 	imageUrl: Optional[str] = None
 
 
@@ -17,6 +18,11 @@ class BundleResult(BaseModel):
 	items: List[BundleItem]
 	subtotal: float
 	currency: str = "USD"
+
+
+class CartItemInput(BaseModel):
+	id: str
+	qty: int = Field(default=1, ge=1)
 
 
 class BundleRequest(BaseModel):
@@ -27,6 +33,7 @@ class BundleRequest(BaseModel):
 	priceSensitivity: int = Field(default=3, ge=1, le=5)
 	agentEnabled: bool = True
 	personaId: Optional[str] = None
+	cartItems: List[CartItemInput] = Field(default_factory=list)
 
 
 class ExplainRequest(BaseModel):
